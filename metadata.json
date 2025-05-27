@@ -1,0 +1,8 @@
+{
+  "name": "My Utilities Hub",
+  "description": "A personal utility application for tracking weight, Disney movie collections, and managing gift ideas with AI assistance.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "prompt": ""
+}
