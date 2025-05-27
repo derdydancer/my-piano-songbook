@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { SinglePersonGiftSuggestion, AISuggestedGiftItem } from '../types';
 import { GEMINI_MODEL_TEXT, DEFAULT_PERSON_SUGGESTION } from '../constants';
@@ -9,9 +8,16 @@ let apiKeyStatus: 'unknown' | 'valid' | 'missing' = 'unknown';
 const initializeGemini = (): GoogleGenAI | null => {
   if (ai) return ai;
   try {
-    const apiKey = process.env.API_KEY;
+    // Try localStorage first, then fallback to env
+    let apiKey = '';
+    try {
+      apiKey = localStorage.getItem('geminiApiKey') || '';
+    } catch {}
     if (!apiKey) {
-      console.warn("Gemini API key (process.env.API_KEY) is not set. AI features will be disabled.");
+      apiKey = process.env.API_KEY || '';
+    }
+    if (!apiKey) {
+      console.warn("Gemini API key is not set. AI features will be disabled.");
       apiKeyStatus = 'missing';
       return null;
     }
