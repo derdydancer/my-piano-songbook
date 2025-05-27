@@ -10,6 +10,7 @@ import { DEFAULT_PLATE_DENOMINATIONS, ALL_LIFTS, BAR_WEIGHT, UTILITY_IDS } from 
 import Modal from '../../components/Modal';
 import CollapsibleSection from './components/CollapsibleSection';
 import SwitchToggle from '../../components/common/SwitchToggle';
+import useGeminiApiKey from '../../hooks/useGeminiApiKey';
 
 const SettingsPage: React.FC = () => {
   const { 
@@ -31,7 +32,8 @@ const SettingsPage: React.FC = () => {
   const [editingPlate, setEditingPlate] = useState<Plate | null>(null);
   const [currentPlateDenom, setCurrentPlateDenom] = useState<number>(DEFAULT_PLATE_DENOMINATIONS[0]);
   const [currentPlateQty, setCurrentPlateQty] = useState<string>("2");
-
+  const [geminiApiKey, setGeminiApiKey] = useGeminiApiKey();
+  const [apiKeyInput, setApiKeyInput] = useState(geminiApiKey);
 
   const handleExport = () => {
     const data = exportData();
@@ -129,6 +131,11 @@ const SettingsPage: React.FC = () => {
     updateUtilitySetting(utilityId, { [field]: value });
   };
   
+  const handleApiKeySave = () => {
+    setGeminiApiKey(apiKeyInput.trim());
+    window.location.reload(); // Reload to re-init Gemini with new key
+  };
+
   const weightUtility = getUtilitySetting(UTILITY_IDS.WEIGHT as UtilityId);
   const disneyUtility = getUtilitySetting(UTILITY_IDS.DISNEY as UtilityId);
   const giftsUtility = getUtilitySetting(UTILITY_IDS.GIFTS as UtilityId);
@@ -180,10 +187,26 @@ const SettingsPage: React.FC = () => {
                         API Key Status: <span className={`font-bold ${apiKeyStatus === 'valid' ? 'text-green-500' : apiKeyStatus === 'missing' ? 'text-red-500' : 'text-yellow-500'}`}>{apiKeyStatus.toUpperCase()}</span>
                     </p>
                     <p className="text-xs text-textSecondary mt-1">
-                        The Gemini API key must be provided via <code>process.env.API_KEY</code>.
+                        You can set your Gemini API key below. This is stored in your browser only.
                         {apiKeyStatus === 'missing' && " AI features in 'Gifts' may not function."}
                     </p>
                 </div>
+            </div>
+            <div className="mt-4">
+              <h4 className="text-md font-semibold text-textPrimary mb-2">Set Gemini API Key</h4>
+              <div className="flex space-x-2">
+                <Input
+                  type="password"
+                  value={apiKeyInput}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setApiKeyInput(e.target.value)}
+                  placeholder="Enter Gemini API Key"
+                  className="w-full"
+                />
+                <Button onClick={handleApiKeySave} type="button">Save</Button>
+              </div>
+              <p className="mt-2 text-xs text-textSecondary">
+                Your key is stored locally and never sent anywhere except to Gemini when you use AI features.
+              </p>
             </div>
           </div>
            <div>
