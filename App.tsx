@@ -8,7 +8,8 @@ import GiftAssistantPage from './features/gift-assistant/GiftAssistantPage';
 import SettingsPage from './features/settings/SettingsPage';
 import WorkoutTrackerPage from './features/workout-tracker/WorkoutTrackerPage';
 import WorkoutHistoryPage from './features/workout-history/WorkoutHistoryPage';
-import BarLoaderTesterPage from './features/bar-loader-tester/BarLoaderTesterPage'; // New Utility
+import BarLoaderTesterPage from './features/bar-loader-tester/BarLoaderTesterPage';
+import DocsViewerPage from './features/docs-viewer/DocsViewerPage'; // New Utility
 import { AppDataProvider, useAppData } from './contexts/AppDataContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { UTILITY_IDS } from './constants';
@@ -41,7 +42,8 @@ const AppContent: React.FC = () => {
       UTILITY_IDS.DISNEY, 
       UTILITY_IDS.GIFTS, 
       UTILITY_IDS.TRAIN,
-      UTILITY_IDS.BAR_LOADER_TESTER, // New Utility
+      UTILITY_IDS.BAR_LOADER_TESTER,
+      UTILITY_IDS.DOCS_VIEWER, // New Utility
     ];
 
     for (const utilityId of preferredOrder) {
@@ -51,7 +53,8 @@ const AppContent: React.FC = () => {
         if (utilityId === UTILITY_IDS.DISNEY) return "/disney";
         if (utilityId === UTILITY_IDS.GIFTS) return "/gifts";
         if (utilityId === UTILITY_IDS.TRAIN) return "/train";
-        if (utilityId === UTILITY_IDS.BAR_LOADER_TESTER) return "/bar-loader-tester"; // New Utility
+        if (utilityId === UTILITY_IDS.BAR_LOADER_TESTER) return "/bar-loader-tester";
+        if (utilityId === UTILITY_IDS.DOCS_VIEWER) return "/docs"; // New Utility
       }
     }
     
@@ -67,7 +70,8 @@ const AppContent: React.FC = () => {
              if (utilityId === UTILITY_IDS.DISNEY) return "/disney";
              if (utilityId === UTILITY_IDS.GIFTS) return "/gifts";
              if (utilityId === UTILITY_IDS.TRAIN) return "/train";
-             if (utilityId === UTILITY_IDS.BAR_LOADER_TESTER) return "/bar-loader-tester"; // New Utility
+             if (utilityId === UTILITY_IDS.BAR_LOADER_TESTER) return "/bar-loader-tester";
+             if (utilityId === UTILITY_IDS.DOCS_VIEWER) return "/docs"; // New Utility
         }
     }
     return "/settings"; 
@@ -84,7 +88,8 @@ const AppContent: React.FC = () => {
           <Route path="/gifts" element={<ProtectedRoute utilityId={UTILITY_IDS.GIFTS} element={<GiftAssistantPage />} />} />
           <Route path="/train" element={<ProtectedRoute utilityId={UTILITY_IDS.TRAIN} element={<WorkoutTrackerPage />} />} />
           <Route path="/workouts" element={<ProtectedRoute utilityId={UTILITY_IDS.TRAIN} element={<WorkoutHistoryPage />} />} />
-          <Route path="/bar-loader-tester" element={<ProtectedRoute utilityId={UTILITY_IDS.BAR_LOADER_TESTER} element={<BarLoaderTesterPage />} />} /> {/* New Utility */}
+          <Route path="/bar-loader-tester" element={<ProtectedRoute utilityId={UTILITY_IDS.BAR_LOADER_TESTER} element={<BarLoaderTesterPage />} />} />
+          <Route path="/docs" element={<ProtectedRoute utilityId={UTILITY_IDS.DOCS_VIEWER} element={<DocsViewerPage />} />} /> {/* New Utility */}
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to={getDefaultRoute()} replace />} />
         </Routes>

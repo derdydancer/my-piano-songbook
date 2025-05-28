@@ -136,7 +136,7 @@ export const createGiftAssistantActions = (
   processAISuggestionsForConfirmation: (aiSuggestions: SinglePersonGiftSuggestion[], fallbackListId?: string | null): ProcessedAIResults => {
     const results: ProcessedAIResults = {
       giftsAddedDirectly: [],
-      needsUserConfirmation: [],
+      needsUserConfirmation: [], // This will remain empty as AI won't suggest new people.
     };
     let finalLists: GiftRecipientList[] = [];
 
@@ -156,54 +156,49 @@ export const createGiftAssistantActions = (
           continue;
         }
 
-        const existingListByName = currentGiftLists.find(l => l.personName === suggestion.personName);
+        // AI is now expected to return personName matching an existing list or the primaryTargetPerson (which should map to an existing list or fallback)
+        let targetList = currentGiftLists.find(l => l.personName === suggestion.personName);
+        let targetListId = targetList?.id;
 
-        if (suggestion.isNewPersonCandidate && !existingListByName) {
-          results.needsUserConfirmation.push(suggestion);
-        } else {
-          let targetList = existingListByName;
-          let targetListId = targetList?.id;
+        if (!targetList && fallbackListId) { // Fallback if AI somehow missed or primaryTargetPerson needs this
+          targetList = currentGiftLists.find(l => l.id === fallbackListId);
+          targetListId = targetList?.id;
+        }
+        
+        if (!targetList && currentGiftLists.length > 0) { // Deep fallback to the first list
+           console.warn(`AI suggested gifts for '${suggestion.personName}' which couldn't be mapped. Attaching to first available list.`);
+           targetList = currentGiftLists.sort((a,b) => a.orderIndex - b.orderIndex)[0];
+           targetListId = targetList.id;
+        }
 
-          if (!targetList && fallbackListId) {
-            targetList = currentGiftLists.find(l => l.id === fallbackListId);
-            targetListId = targetList?.id;
-          }
-          
-          if (!targetList && currentGiftLists.length > 0 && !suggestion.isNewPersonCandidate) {
-             console.warn(`AI suggested gifts for '${suggestion.personName}' which was not found and not marked new. Attaching to first list as deep fallback.`);
-             targetList = currentGiftLists.sort((a,b) => a.orderIndex - b.orderIndex)[0];
-             targetListId = targetList.id;
-          }
 
-          if (targetList && targetListId) {
-            const listIndex = currentGiftLists.findIndex(l => l.id === targetListId);
-            if (listIndex !== -1) {
-              const newGiftItems: GiftItem[] = suggestion.gifts
-                .filter(sg => sg.itemName && sg.itemName.trim() !== "")
-                .map(sg => ({
-                  id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
-                  itemName: sg.itemName.trim(),
-                  details: sg.details?.trim(),
-                  status: GiftItemStatus.Idea,
-                  isNew: true,
-                  dateNewClearTimestamp: Date.now() + NEW_TAG_DURATION_MS,
-                  tags: [], 
-                  dateAdded: new Date().toISOString(),
-                }));
+        if (targetList && targetListId) {
+          const listIndex = currentGiftLists.findIndex(l => l.id === targetListId);
+          if (listIndex !== -1) {
+            const newGiftItems: GiftItem[] = suggestion.gifts
+              .filter(sg => sg.itemName && sg.itemName.trim() !== "")
+              .map(sg => ({
+                id: `${Date.now()}-${(Math.random().toString(36) + "00000000000000000").slice(2, 9)}`, // Using template literal and ensuring substring length
+                itemName: sg.itemName.trim(),
+                details: sg.details?.trim(),
+                status: GiftItemStatus.Idea,
+                isNew: true,
+                dateNewClearTimestamp: Date.now() + NEW_TAG_DURATION_MS,
+                tags: [], 
+                dateAdded: new Date().toISOString(),
+              }));
 
-              if (newGiftItems.length > 0) {
-                 giftsToUpdate.push({ listIndex, giftsToAdd: newGiftItems });
-                 results.giftsAddedDirectly.push({
-                   listId: targetListId,
-                   personName: targetList.personName,
-                   giftsAddedCount: newGiftItems.length,
-                 });
-              }
+            if (newGiftItems.length > 0) {
+               giftsToUpdate.push({ listIndex, giftsToAdd: newGiftItems });
+               results.giftsAddedDirectly.push({
+                 listId: targetListId,
+                 personName: targetList.personName,
+                 giftsAddedCount: newGiftItems.length,
+               });
             }
-          } else if (!suggestion.isNewPersonCandidate) {
-             console.warn(`AI suggested gifts for '${suggestion.personName}' which was not found and not flagged as new. Adding to user confirmation queue.`);
-             results.needsUserConfirmation.push({...suggestion, isNewPersonCandidate: true});
           }
+        } else {
+            console.warn(`Could not find a target list for suggestion for '${suggestion.personName}'. Gifts were not added.`);
         }
       }
       
@@ -219,8 +214,9 @@ export const createGiftAssistantActions = (
     return results;
   },
   addConfirmedAIGifts: (listId: string, gifts: AISuggestedGiftItem[]) => {
+    // This function might become simpler or less used if AI confirmation for new people is removed.
+    // For now, it assumes gifts are being added to an existing listId.
     setAppData(prev => {
-      // Clear isNew flags for all existing items first
       let updatedLists = prev.giftRecipientLists.map(list => ({
           ...list,
           gifts: list.gifts.map(gift => gift.isNew ? { ...gift, isNew: false, dateNewClearTimestamp: undefined } : gift)
@@ -232,7 +228,7 @@ export const createGiftAssistantActions = (
       const newGiftItems: GiftItem[] = gifts
         .filter(sg => sg.itemName && sg.itemName.trim() !== "")
         .map(sg => ({
-          id: Date.now().toString() + Math.random().toString(36).substring(2, 9),
+          id: `${Date.now()}-${(Math.random().toString(36) + "00000000000000000").slice(2, 9)}`, // Using template literal and ensuring substring length
           itemName: sg.itemName.trim(),
           details: sg.details?.trim(),
           status: GiftItemStatus.Idea,
@@ -251,10 +247,8 @@ export const createGiftAssistantActions = (
       return { ...prev, giftRecipientLists: updatedLists.sort((a,b) => a.orderIndex - b.orderIndex) };
     });
   },
-  // Expose giftRecipientLists directly for components that need to display them.
-  // This is a read-only accessor from the context perspective.
   getGiftRecipientLists: (): GiftRecipientList[] => {
       const appData = getAppData();
-      return [...appData.giftRecipientLists].sort((a,b) => a.orderIndex - b.orderIndex);
+      return [...appData.giftRecipientLists].sort((a,b) => a.orderIndex - b.orderIndex); // Line 255, no change needed based on error
   }
 });

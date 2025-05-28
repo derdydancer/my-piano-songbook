@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { HomeIcon, FilmIcon, GiftIcon, CogIcon, DumbbellIcon, ClipboardListIcon, DotsHorizontalIcon, BeakerIcon } from './common/Icons'; // Added BeakerIcon
+import { HomeIcon, FilmIcon, GiftIcon, CogIcon, DumbbellIcon, ClipboardListIcon, DotsHorizontalIcon, BeakerIcon, DocumentTextIcon } from './common/Icons'; // Added DocumentTextIcon
 import { useAppData } from '../contexts/AppDataContext';
 import { UtilityId, UtilitySetting } from '../types';
 import { UTILITY_IDS } from '../constants';
@@ -104,11 +104,13 @@ const BottomNav: React.FC = () => {
     { to: '/gifts', utilityId: UTILITY_IDS.GIFTS as UtilityId, icon: <GiftIcon className="w-6 h-6" />, label: 'Gifts' },
     { to: '/train', utilityId: UTILITY_IDS.TRAIN as UtilityId, icon: <DumbbellIcon className="w-6 h-6" />, label: 'Train' },
     { to: '/workouts', utilityId: UTILITY_IDS.TRAIN as UtilityId, icon: <ClipboardListIcon className="w-6 h-6" />, label: 'Workouts' }, 
-    { to: '/bar-loader-tester', utilityId: UTILITY_IDS.BAR_LOADER_TESTER as UtilityId, icon: <BeakerIcon className="w-6 h-6" />, label: 'Bar Test' }, // New Utility
+    { to: '/bar-loader-tester', utilityId: UTILITY_IDS.BAR_LOADER_TESTER as UtilityId, icon: <BeakerIcon className="w-6 h-6" />, label: 'Bar Test' },
+    { to: '/docs', utilityId: UTILITY_IDS.DOCS_VIEWER as UtilityId, icon: <DocumentTextIcon className="w-6 h-6" />, label: 'Docs' }, // New Utility
     { to: '/settings', utilityId: UTILITY_IDS.SETTINGS as UtilityId, icon: <CogIcon className="w-6 h-6" />, label: 'Settings' },
   ];
   
   const getActualUtilitySetting = (id: UtilityId): UtilitySetting | undefined => {
+    // Special handling for 'Workouts' which uses the 'Train' utility's settings
     if (id === UTILITY_IDS.TRAIN && allNavItems.find(item => item.label === 'Workouts')?.utilityId === id) {
         const trainSetting = getUtilitySetting(UTILITY_IDS.TRAIN as UtilityId);
         return trainSetting;
@@ -121,44 +123,42 @@ const BottomNav: React.FC = () => {
     return utility?.enabled && !utility.showInMoreMenu;
   });
 
-  const moreMenuItems = allNavItems.filter(item => {
-    const utility = getActualUtilitySetting(item.utilityId);
+  // Logic for items that appear in the "More" menu
+  // An item appears in "More" if its utility is enabled AND showInMoreMenu is true.
+  const moreMenuItemsFromSettings = allNavItems.filter(item => {
+    const utility = getUtilitySetting(item.utilityId); // Use direct utility setting for showInMoreMenu check
+    
+    // Handle 'Workouts' specifically: it uses the 'Train' utility's enabled status,
+    // but its own showInMoreMenu behavior (if it were distinct, or if Train is in More)
     if (item.label === 'Workouts') {
-        const trainUtilitySetting = getUtilitySetting(UTILITY_IDS.TRAIN as UtilityId);
-        return trainUtilitySetting?.enabled && trainUtilitySetting.showInMoreMenu;
+      const trainUtilitySetting = getUtilitySetting(UTILITY_IDS.TRAIN as UtilityId);
+      return trainUtilitySetting?.enabled && trainUtilitySetting.showInMoreMenu;
     }
+    
     return utility?.enabled && utility.showInMoreMenu;
   });
-  
-  const uniqueMoreMenuItems = moreMenuItems.reduce((acc, current) => {
-    if (current.label === 'Workouts') {
-        const trainUtilityInMore = moreMenuItems.find(i => i.label === 'Train');
-        if (trainUtilityInMore) {
-            if (!acc.find(item => item.label === 'Train')) { 
-                acc.push(trainUtilityInMore);
-            }
-            if (!acc.find(item => item.label === 'Workouts')) {
-                acc.push(current);
-            }
-        }
-    } else if (current.label === 'Train') {
-        if (!acc.find(item => item.label === 'Train')) {
-            acc.push(current);
-        }
+
+  // Deduplicate and ensure correct items are in the "More" menu based on showInMoreMenu logic
+  const uniqueMoreMenuItems = moreMenuItemsFromSettings.reduce((acc, current) => {
+    const isAlreadyAdded = acc.some(item => item.label === current.label);
+    if (!isAlreadyAdded) {
+      // If 'Train' is in "More", and 'Workouts' is also configured for "More", both should appear.
+      // If 'Workouts' is in "More" (because 'Train' is in "More"), but 'Train' itself isn't, 'Workouts' logic handles it.
+      acc.push(current);
+
+      // If adding 'Train' and 'Workouts' is also in moreMenuItems (meaning Train utility is enabled and showInMoreMenu), add 'Workouts' if not present.
+      if (current.utilityId === UTILITY_IDS.TRAIN && current.label === 'Train') {
         const workoutsNavItem = allNavItems.find(i => i.label === 'Workouts');
         const trainUtilitySetting = getUtilitySetting(UTILITY_IDS.TRAIN as UtilityId);
-        if (workoutsNavItem && trainUtilitySetting?.enabled && trainUtilitySetting.showInMoreMenu) {
-            if (!acc.find(item => item.label === 'Workouts')) {
-                 acc.push(workoutsNavItem);
-            }
+        if (workoutsNavItem && trainUtilitySetting?.enabled && trainUtilitySetting.showInMoreMenu && !acc.some(item => item.label === 'Workouts')) {
+          acc.push(workoutsNavItem);
         }
-    }
-    else if (!acc.find(item => item.label === current.label)) {
-        acc.push(current);
+      }
     }
     return acc;
   }, [] as NavItemDef[]);
   
+  // Sort "More" menu items according to their original order in allNavItems
   uniqueMoreMenuItems.sort((a, b) => {
     const aIndex = allNavItems.findIndex(item => item.label === a.label);
     const bIndex = allNavItems.findIndex(item => item.label === b.label);

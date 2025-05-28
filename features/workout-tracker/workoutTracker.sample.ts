@@ -12,11 +12,11 @@ const daysAgo = (days: number): string => {
 };
 
 export const samplePlateInventory: Plate[] = [
-  { denomination: 25, quantity: 0 },
+  { denomination: 25, quantity: 2 },
   { denomination: 20, quantity: 4 },
-  { denomination: 15, quantity: 2 }, 
+  { denomination: 15, quantity: 0 }, 
   { denomination: 10, quantity: 2 },
-  { denomination: 5, quantity: 2 },
+  { denomination: 5, quantity: 4 },
   { denomination: 2.5, quantity: 2 },
   { denomination: 1.25, quantity: 2 },
   { denomination: 0.5, quantity: 2 }, 
@@ -24,9 +24,9 @@ export const samplePlateInventory: Plate[] = [
 
 export const sampleExerciseSettings: ExerciseSettings = {
   ...(getStockExerciseSettings()), 
-  'Squat': { ...(getStockExerciseSettings()['Squat']), lastAchievedWorksetWeight: 105, progressionIncrement: 1.5 },
-  'Press': { ...(getStockExerciseSettings()['Press']), lastAchievedWorksetWeight: 58.5, progressionIncrement: 1.5 }, 
-  'Deadlift': { ...(getStockExerciseSettings()['Deadlift']), lastAchievedWorksetWeight: 145, progressionIncrement: 2.5 }, 
+  'Squat': { ...(getStockExerciseSettings()['Squat']), lastAchievedWorksetWeight: 100, progressionIncrement: 2.5 },
+  'Press': { ...(getStockExerciseSettings()['Press']), lastAchievedWorksetWeight: 60, progressionIncrement: 1.0 }, 
+  'Deadlift': { ...(getStockExerciseSettings()['Deadlift']), lastAchievedWorksetWeight: 140, progressionIncrement: 5.0 }, 
   'Bench Press': { ...(getStockExerciseSettings()['Bench Press']), lastAchievedWorksetWeight: 80, progressionIncrement: 2.5 },
 };
 

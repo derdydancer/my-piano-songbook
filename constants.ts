@@ -11,6 +11,7 @@ export const UTILITY_IDS: Record<string, UtilityId> = {
   TRAIN: 'train',
   SETTINGS: 'settings',
   BAR_LOADER_TESTER: 'barLoaderTester',
+  DOCS_VIEWER: 'docsViewer',
 };
 
 export const DEFAULT_UTILITY_SETTINGS: UtilitySetting[] = [
@@ -19,7 +20,8 @@ export const DEFAULT_UTILITY_SETTINGS: UtilitySetting[] = [
   { id: UTILITY_IDS.GIFTS as UtilityId, name: "Gift Assistant", enabled: true, showInMoreMenu: false },
   { id: UTILITY_IDS.TRAIN as UtilityId, name: "Workout Tracker", enabled: true, showInMoreMenu: false },
   { id: UTILITY_IDS.SETTINGS as UtilityId, name: "Settings", enabled: true, showInMoreMenu: false }, // Settings should always be enabled
-  { id: UTILITY_IDS.BAR_LOADER_TESTER as UtilityId, name: "Bar Loading Tester", enabled: true, showInMoreMenu: true }, // New utility
+  { id: UTILITY_IDS.BAR_LOADER_TESTER as UtilityId, name: "Bar Loading Tester", enabled: true, showInMoreMenu: true }, 
+  { id: UTILITY_IDS.DOCS_VIEWER as UtilityId, name: "Docs Viewer", enabled: true, showInMoreMenu: true },
 ];
 
 // Other truly global constants can remain here.

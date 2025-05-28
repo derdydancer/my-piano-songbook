@@ -6,18 +6,13 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import TextArea from '../../components/common/TextArea';
 import Modal from '../../components/Modal';
-import { PlusCircleIcon, TrashIcon, PencilIcon, MicrophoneIcon, PhotoIcon, InformationCircleIcon, RefreshCwIcon, ClipboardCopyIcon, ChevronUpIcon, ChevronDownIcon } from '../../components/common/Icons';
+import { PlusCircleIcon, TrashIcon, PencilIcon, MicrophoneIcon, PhotoIcon, InformationCircleIcon, RefreshCwIcon, ClipboardCopyIcon, ChevronUpIcon, ChevronDownIcon, CameraIcon } from '../../components/common/Icons'; // Added CameraIcon
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { geminiService } from '../../services/geminiService';
 import AlertModal from '../../components/common/AlertModal';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import CollapsibleSection from '../../components/common/CollapsibleSection';
-import { NEW_TAG_DURATION_MS } from './giftAssistant.data'; // Import from local data/constants module
-
-// Helper to get a unique ID for modals if multiple are on the page
-let modalIdCounter = 0;
-const getUniqueModalId = (prefix: string) => `${prefix}-${modalIdCounter++}`;
-
+import { NEW_TAG_DURATION_MS } from './giftAssistant.data';
 
 interface GiftItemFormProps {
   listId: string;
@@ -84,15 +79,15 @@ const GiftItemFormModal: React.FC<GiftItemFormProps> = ({ listId, onSave, onClos
 
 const GiftAssistantPage: React.FC = () => {
   const {
-    // giftRecipientLists, // Use getGiftRecipientLists() instead
-    getGiftRecipientLists, // New getter for lists
+    getGiftRecipientLists, 
     addGiftRecipientList, deleteGiftRecipientList, updateGiftRecipientListName, 
     updateGiftRecipientListKnowledge, moveGiftRecipientList,
     addGiftItem, updateGiftItem, deleteGiftItem, clearIsNewFlagForItem,
-    processAISuggestionsForConfirmation, addConfirmedAIGifts
+    processAISuggestionsForConfirmation, 
+    // addConfirmedAIGifts (no longer needed as AI confirmation for new people is removed)
   } = useAppData();
   
-  const giftRecipientLists = getGiftRecipientLists(); // Get lists via the new accessor
+  const giftRecipientLists = getGiftRecipientLists(); 
 
   const [isListFormModalOpen, setIsListFormModalOpen] = useState(false);
   const [editingList, setEditingList] = useState<GiftRecipientList | null>(null);
@@ -108,10 +103,11 @@ const GiftAssistantPage: React.FC = () => {
 
   const [aiPrompt, setAiPrompt] = useState('');
   const [isLoadingAI, setIsLoadingAI] = useState(false);
-  const [aiConfirmationNeeded, setAiConfirmationNeeded] = useState<SinglePersonGiftSuggestion[]>([]);
-  const [selectedListForAIConfirm, setSelectedListForAIConfirm] = useState<string | null>(null);
   const [customAIContext, setCustomAIContext] = useState<CustomAIContext | null>(null);
+  
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
 
   const openAlert = (title: string, message: string) => setAlertModalInfo({ isOpen: true, title, message });
   const closeAlert = () => setAlertModalInfo({ isOpen: false, title: '', message: '' });
@@ -154,10 +150,10 @@ const GiftAssistantPage: React.FC = () => {
     if (existingItemId) {
       const originalItem = giftRecipientLists.find(l => l.id === listId)?.gifts.find(g => g.id === existingItemId);
       if (originalItem) {
-        updateGiftItem(listId, { ...originalItem, ...itemData, isNew: originalItem.isNew, dateNewClearTimestamp: originalItem.dateNewClearTimestamp }); // Preserve isNew from AI
+        updateGiftItem(listId, { ...originalItem, ...itemData, isNew: originalItem.isNew, dateNewClearTimestamp: originalItem.dateNewClearTimestamp });
       }
     } else {
-      addGiftItem(listId, itemData); // Manual adds are not "New" from AI
+      addGiftItem(listId, itemData);
     }
     setIsGiftFormModalOpen(false);
     setEditingGift(null);
@@ -190,7 +186,9 @@ const GiftAssistantPage: React.FC = () => {
     setIsGiftFormModalOpen(true);
   };
   
-  const getPersonNameFromId = (listId: string | null) => giftRecipientLists.find(l => l.id === listId)?.personName || 'Unknown';
+  const getPersonNameFromId = (listId: string | null): string => {
+    return giftRecipientLists.find(l => l.id === listId)?.personName || 'Unknown';
+  }
 
   const handleCopyList = (list: GiftRecipientList) => {
     const listContent = list.gifts.map(gift => {
@@ -210,7 +208,6 @@ const GiftAssistantPage: React.FC = () => {
     }
   };
   
-  // Effect for "New!" tag timeout
   useEffect(() => {
     const now = Date.now();
     let timeoutIds: NodeJS.Timeout[] = [];
@@ -218,10 +215,8 @@ const GiftAssistantPage: React.FC = () => {
     giftRecipientLists.forEach(list => {
       list.gifts.forEach(gift => {
         if (gift.isNew && gift.dateNewClearTimestamp && gift.dateNewClearTimestamp <= now) {
-          // Already expired, clear immediately
           clearIsNewFlagForItem(list.id, gift.id);
         } else if (gift.isNew && gift.dateNewClearTimestamp) {
-          // Set timeout for future expiry
           const delay = gift.dateNewClearTimestamp - now;
           const timeoutId = setTimeout(() => {
             clearIsNewFlagForItem(list.id, gift.id);
@@ -232,7 +227,7 @@ const GiftAssistantPage: React.FC = () => {
     });
 
     return () => {
-      timeoutIds.forEach(clearTimeout); // Cleanup timeouts
+      timeoutIds.forEach(clearTimeout); 
     };
   }, [giftRecipientLists, clearIsNewFlagForItem]);
 
@@ -240,16 +235,16 @@ const GiftAssistantPage: React.FC = () => {
   // --- AI Related Functions ---
   const handleAISubmit = async (promptText: string, imageFile?: File) => {
     if (!promptText.trim() && !imageFile) {
-      openAlert("AI Prompt", "Please enter a text prompt or select an image.");
+      openAlert("AI Prompt", "Please enter a text prompt, select an image, or take a photo.");
       return;
     }
     setIsLoadingAI(true);
-    setAiConfirmationNeeded([]);
     
     const allNames = giftRecipientLists.map(l => l.personName);
-    const targetPersonName = customAIContext?.personName || (giftRecipientLists.length > 0 ? giftRecipientLists[0].personName : "My Friend");
+    const targetPersonName = customAIContext?.personName || (giftRecipientLists.length > 0 ? giftRecipientLists.sort((a,b)=>a.orderIndex - b.orderIndex)[0].personName : "My Friend");
     const knowledge = customAIContext?.knowledge;
     const existingGifts = customAIContext?.existingGifts;
+    const hasCtx = !!customAIContext;
 
     try {
       let results: SinglePersonGiftSuggestion[] | null = null;
@@ -257,13 +252,14 @@ const GiftAssistantPage: React.FC = () => {
         const reader = new FileReader();
         reader.onloadend = async () => {
           const base64Data = (reader.result as string).split(',')[1];
-          results = await geminiService.generateGiftIdeasFromImage(base64Data, imageFile.type, targetPersonName, allNames, knowledge, existingGifts);
+          results = await geminiService.generateGiftIdeasFromImage(base64Data, imageFile.type, targetPersonName, allNames, knowledge, existingGifts, hasCtx);
           processAIResults(results);
         };
         reader.readAsDataURL(imageFile);
         if(imageInputRef.current) imageInputRef.current.value = ""; 
+        if(cameraInputRef.current) cameraInputRef.current.value = "";
       } else {
-        results = await geminiService.generateGiftIdeasFromText(promptText, targetPersonName, allNames, knowledge, existingGifts);
+        results = await geminiService.generateGiftIdeasFromText(promptText, targetPersonName, allNames, knowledge, existingGifts, hasCtx);
         processAIResults(results);
       }
       setAiPrompt(''); 
@@ -275,19 +271,18 @@ const GiftAssistantPage: React.FC = () => {
 
   const processAIResults = (suggestions: SinglePersonGiftSuggestion[] | null) => {
     if (suggestions) {
+      // Determine fallback list: custom context list, or first available list.
       const defaultListIdForFallback = customAIContext?.listId || (giftRecipientLists.length > 0 ? giftRecipientLists.sort((a,b)=>a.orderIndex - b.orderIndex)[0].id : null);
-      const { giftsAddedDirectly, needsUserConfirmation } = processAISuggestionsForConfirmation(suggestions, defaultListIdForFallback);
+      const { giftsAddedDirectly } = processAISuggestionsForConfirmation(suggestions, defaultListIdForFallback);
       
       let message = "";
       if(giftsAddedDirectly.length > 0){
         message += giftsAddedDirectly.map(r => `${r.giftsAddedCount} gift(s) added to ${r.personName}'s list.`).join('\n');
       }
-      if(needsUserConfirmation.length > 0){
-        message += (message ? "\n\n" : "") + `${needsUserConfirmation.length} suggestion(s) for new people need your confirmation.`;
-        setAiConfirmationNeeded(needsUserConfirmation);
-      }
-      if(!message && suggestions.length === 0) message = "AI didn't find any specific gift ideas, or couldn't match to existing lists clearly. Try a more specific prompt.";
-      else if (!message && suggestions.length > 0) message = "AI suggestions processed. Some might need confirmation if for new people."
+      
+      if(!message && suggestions.length === 0) message = "AI didn't find any specific gift ideas or couldn't parse them for existing lists. Try a more specific prompt or ensure people mentioned are in your lists.";
+      else if (!message && suggestions.length > 0 && giftsAddedDirectly.length === 0) message = "AI processed suggestions, but no items were directly added. This might happen if mentioned people aren't in your lists or no fallback was available."
+      else if (!message) message = "AI suggestions processed."; // Generic fallback if other conditions aren't met
       
       openAlert("AI Suggestions", message);
 
@@ -298,24 +293,6 @@ const GiftAssistantPage: React.FC = () => {
      if(customAIContext) setCustomAIContext(null); 
   };
   
-  const handleConfirmAISuggestion = (suggestion: SinglePersonGiftSuggestion) => {
-    let targetListId = selectedListForAIConfirm;
-    if (selectedListForAIConfirm === 'new') {
-        const newName = suggestion.personName || "New Person";
-        targetListId = addGiftRecipientList(newName); // This function now returns the new list ID
-        openAlert("List Created", `New list created for ${newName}.`);
-    }
-
-    if (targetListId) {
-        addConfirmedAIGifts(targetListId, suggestion.gifts);
-        openAlert("Gifts Added", `${suggestion.gifts.length} gift(s) added to the selected list.`);
-    } else {
-        openAlert("Error", "Could not determine a list to add gifts to. Please select a list or 'Create New'.");
-    }
-    setAiConfirmationNeeded(prev => prev.filter(s => s !== suggestion));
-    setSelectedListForAIConfirm(null); // Reset selection
-  };
-
   const handleSetCustomAIContext = (list: GiftRecipientList) => {
     setCustomAIContext({
       listId: list.id,
@@ -323,7 +300,13 @@ const GiftAssistantPage: React.FC = () => {
       knowledge: list.knowledge,
       existingGifts: list.gifts.map(g => ({ itemName: g.itemName, details: g.details }))
     });
-    openAlert("Context Set", `AI will now focus on personalized suggestions for ${list.personName}. Provide a general prompt or an image.`);
+    openAlert("Context Set", `AI will now focus on personalized suggestions for ${list.personName}. Provide a general prompt, an image, or take a photo.`);
+  };
+
+  const handleCameraCapture = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files.length > 0) {
+      handleAISubmit(aiPrompt || "Gift ideas from captured photo", event.target.files[0]);
+    }
   };
 
 
@@ -336,7 +319,7 @@ const GiftAssistantPage: React.FC = () => {
         </Button>
       </div>
 
-      <CollapsibleSection title={customAIContext ? `AI Brainstorming for ${customAIContext.personName}` : "AI Gift Brainstorm"} initialOpen={true}>
+      <CollapsibleSection title={customAIContext ? `AI Brainstorming for ${customAIContext.personName}` : "AI Gift Helper"} initialOpen={true}>
         <div className="space-y-3 p-1">
           {customAIContext && (
              <div className="text-sm text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-gray-700 p-2 rounded-md">
@@ -350,22 +333,30 @@ const GiftAssistantPage: React.FC = () => {
           <TextArea
             value={aiPrompt}
             onChange={e => setAiPrompt(e.target.value)}
-            placeholder="Describe the person, occasion, or gift ideas (e.g., 'birthday gift for my tech-loving dad', 'unique gifts for someone who has everything', 'ideas related to this image')..."
+            placeholder={customAIContext 
+                ? `Describe what kind of gift you're looking for ${customAIContext.personName}...` 
+                : `Describe gifts and for whom (e.g., 'Book for Dad, perfume for Mom'), or general ideas. Or use an image/photo.`
+            }
             rows={3}
             containerClassName="mb-0"
           />
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div className="flex gap-2">
               <Button onClick={() => handleAISubmit(aiPrompt)} disabled={isLoadingAI} leftIcon={<MicrophoneIcon className="w-5 h-5"/>}>
-                {isLoadingAI ? <LoadingSpinner size="sm" /> : "Get Text Ideas"}
+                {isLoadingAI ? <LoadingSpinner size="sm" /> : "Use Text"}
               </Button>
               <Button variant="ghost" onClick={() => imageInputRef.current?.click()} disabled={isLoadingAI} leftIcon={<PhotoIcon className="w-5 h-5"/>}>
                 {isLoadingAI ? <LoadingSpinner size="sm" /> : "Use Image"}
               </Button>
+              <Button variant="ghost" onClick={() => cameraInputRef.current?.click()} disabled={isLoadingAI} leftIcon={<CameraIcon className="w-5 h-5"/>}>
+                {isLoadingAI ? <LoadingSpinner size="sm" /> : "Take Photo"}
+              </Button>
             </div>
             <input type="file" accept="image/*" ref={imageInputRef} className="hidden" onChange={(e) => e.target.files && e.target.files.length > 0 && handleAISubmit(aiPrompt || "Gift ideas from image", e.target.files[0])} />
-            <Button variant="ghost" size="sm" onClick={() => { setAiPrompt(''); if(imageInputRef.current) imageInputRef.current.value = ""; }} disabled={isLoadingAI} leftIcon={<RefreshCwIcon className="w-4 h-4"/>}>
-                Clear Prompt
+            <input type="file" accept="image/*" capture="environment" ref={cameraInputRef} className="hidden" onChange={handleCameraCapture} />
+            
+            <Button variant="ghost" size="sm" onClick={() => { setAiPrompt(''); if(imageInputRef.current) imageInputRef.current.value = ""; if(cameraInputRef.current) cameraInputRef.current.value = ""; }} disabled={isLoadingAI} leftIcon={<RefreshCwIcon className="w-4 h-4"/>}>
+                Clear
             </Button>
           </div>
           {geminiService.getApiKeyStatus() !== 'valid' && 
@@ -377,39 +368,7 @@ const GiftAssistantPage: React.FC = () => {
         </div>
       </CollapsibleSection>
 
-      {aiConfirmationNeeded.length > 0 && (
-        <CollapsibleSection title="Confirm AI Suggestions for New People" initialOpen={true}>
-           <div className="space-y-4">
-            {aiConfirmationNeeded.map((suggestion, idx) => (
-                <div key={idx} className="p-3 bg-yellow-50 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700 rounded-md">
-                    <h4 className="font-semibold text-yellow-800 dark:text-yellow-200">Gifts for "{suggestion.personName}" (New Person Candidate):</h4>
-                    <ul className="list-disc list-inside text-sm text-yellow-700 dark:text-yellow-300 my-1">
-                        {suggestion.gifts.map((gift, gIdx) => <li key={gIdx}>{gift.itemName}{gift.details ? ` (${gift.details})` : ''}</li>)}
-                    </ul>
-                    <div className="mt-2 space-y-2 sm:space-y-0 sm:flex sm:items-end sm:space-x-2">
-                        <div className="flex-grow">
-                            <label htmlFor={`assign-${idx}`} className="text-xs font-medium text-yellow-700 dark:text-yellow-300">Assign to:</label>
-                            <select 
-                                id={`assign-${idx}`}
-                                onChange={(e) => setSelectedListForAIConfirm(e.target.value)}
-                                className="mt-1 block w-full pl-3 pr-10 py-1.5 text-sm bg-card border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-primary focus:border-primary rounded-md text-textPrimary"
-                                defaultValue=""
-                            >
-                                <option value="" disabled>Select a list or create new</option>
-                                <option value="new">Create New List for "{suggestion.personName}"</option>
-                                {giftRecipientLists.map(list => <option key={list.id} value={list.id}>{list.personName}</option>)}
-                            </select>
-                        </div>
-                        <Button size="sm" onClick={() => handleConfirmAISuggestion(suggestion)} disabled={!selectedListForAIConfirm}>Confirm & Add</Button>
-                    </div>
-                </div>
-            ))}
-           </div>
-        </CollapsibleSection>
-      )}
-
-
-      {giftRecipientLists.length === 0 && !isLoadingAI && aiConfirmationNeeded.length === 0 && (
+      {giftRecipientLists.length === 0 && !isLoadingAI && (
         <p className="text-center text-textSecondary py-8">No gift lists yet. Click "New List" to start organizing your gift ideas!</p>
       )}
 

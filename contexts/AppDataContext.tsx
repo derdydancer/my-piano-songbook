@@ -10,7 +10,8 @@ import { initialWeightTrackerData, createWeightTrackerActions, WeightTrackerActi
 import { initialDisneyCollectionData, createDisneyCollectionActions, DisneyCollectionActions } from '../features/disney-collection/disneyCollection.data';
 import { initialGiftAssistantData, createGiftAssistantActions, GiftAssistantActions, NEW_TAG_DURATION_MS } from '../features/gift-assistant/giftAssistant.data';
 import { initialWorkoutTrackerData, createWorkoutTrackerActions, WorkoutTrackerActions } from '../features/workout-tracker/workoutTracker.data';
-import { initialBarLoaderTesterData, createBarLoaderTesterActions, BarLoaderTesterActions } from '../features/bar-loader-tester/barLoaderTester.data'; // New Utility
+import { initialBarLoaderTesterData, createBarLoaderTesterActions, BarLoaderTesterActions } from '../features/bar-loader-tester/barLoaderTester.data';
+import { initialDocsViewerData, createDocsViewerActions, DocsViewerActions } from '../features/docs-viewer/docsViewer.data'; // New Utility
 
 import { ALL_LIFTS as WORKOUT_ALL_LIFTS } from '../features/workout-tracker/workoutTracker.constants'; // For migration
 import { getDefaultPlateInventory as getWorkoutDefaultPlateInventory, getDefaultExerciseSettings as getWorkoutDefaultExerciseSettings } from '../features/workout-tracker/workoutTracker.data'; // For migration
@@ -36,7 +37,8 @@ export type AppDataContextType = AppDataCoreContextType &
   DisneyCollectionActions &
   GiftAssistantActions &
   WorkoutTrackerActions &
-  BarLoaderTesterActions; // New Utility Actions
+  BarLoaderTesterActions &
+  DocsViewerActions; // New Utility Actions
 
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
 
@@ -46,7 +48,8 @@ const initialAppData: AppData = {
   ...initialDisneyCollectionData,
   ...initialGiftAssistantData,
   ...initialWorkoutTrackerData,
-  ...initialBarLoaderTesterData, // New Utility
+  ...initialBarLoaderTesterData, 
+  ...initialDocsViewerData, // New Utility
   utilitySettings: DEFAULT_UTILITY_SETTINGS,
 };
 
@@ -149,20 +152,35 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             const existingSetting = currentSettingsMap.get(defaultSetting.id);
             if (existingSetting) {
                 let needsUpdate = false;
+                // Ensure all properties from defaultSetting are present, preserving existing values
                 const updatedExistingSetting = { ...defaultSetting, ...existingSetting };
-                if (updatedExistingSetting.id === UTILITY_IDS.SETTINGS) {
+                if (updatedExistingSetting.id === UTILITY_IDS.SETTINGS) { // Ensure settings is always enabled
                     updatedExistingSetting.enabled = true; 
                 }
-                if (JSON.stringify(updatedExistingSetting) !== JSON.stringify(existingSetting)) {
-                    needsUpdate = true;
+                // Check if any property defined in defaultSetting is missing or different in existingSetting
+                for (const key in defaultSetting) {
+                    if ((defaultSetting as any)[key] !== (existingSetting as any)[key]) {
+                        //This logic was flawed, if a default property was added, it would always trigger update
+                        //Only trigger if a property in defaultSetting is NOT in existingSetting, or if it exists AND it's different
+                        if (!(key in existingSetting) || (defaultSetting as any)[key] !== (existingSetting as any)[key]) {
+                           needsUpdate = true;
+                           break;
+                        }
+                    }
                 }
+                 if(!needsUpdate && Object.keys(existingSetting).length !== Object.keys(updatedExistingSetting).length){
+                     needsUpdate = true; // If properties were added from default
+                 }
+
                 mergedSettings.push(updatedExistingSetting);
                 if(needsUpdate) utilitiesChanged = true;
             } else {
+                // New utility added to DEFAULT_UTILITY_SETTINGS
                 mergedSettings.push(defaultSetting); 
                 utilitiesChanged = true;
             }
         });
+        // Ensure no old/removed utilities linger
         const validUtilityIds = new Set(DEFAULT_UTILITY_SETTINGS.map(s => s.id));
         const finalMergedSettings = mergedSettings.filter(s => validUtilityIds.has(s.id));
 
@@ -228,7 +246,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
       console.error("Import failed: Invalid data format.", data);
       return false;
     }
-  }, [setAppData]);
+  }, [setAppData, initialAppData]); // Added initialAppData dependency
   
   const loadSampleData = useCallback(() => {
     setAppData(AI_STUDIO_SAMPLE_DATA);
@@ -255,7 +273,9 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, [appData.utilitySettings]);
 
   const getAppDataForActions = useCallback((): AppData => {
-    return appData;
+    // Return a deep copy to prevent direct mutation if actions were to modify the returned object before setAppData
+    // For read-only purposes, this is fine. If actions might modify it, a deep copy is safer.
+    return appData; 
   }, [appData]);
 
 
@@ -263,8 +283,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
   const disneyCollectionActions = createDisneyCollectionActions(setAppData, getAppDataForActions);
   const giftAssistantActions = createGiftAssistantActions(setAppData, getAppDataForActions);
   const workoutTrackerActions = createWorkoutTrackerActions(setAppData, getAppDataForActions);
-  // Pass workoutTrackerActions to createBarLoaderTesterActions
   const barLoaderTesterActions = createBarLoaderTesterActions(setAppData, getAppDataForActions, workoutTrackerActions); 
+  const docsViewerActions = createDocsViewerActions(setAppData, getAppDataForActions);
 
 
   const contextValue: AppDataContextType = {
@@ -281,6 +301,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     ...giftAssistantActions,
     ...workoutTrackerActions,
     ...barLoaderTesterActions, 
+    ...docsViewerActions,
   };
   
   return (

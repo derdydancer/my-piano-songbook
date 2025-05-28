@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { SinglePersonGiftSuggestion, AISuggestedGiftItem } from '../types';
 import { GEMINI_MODEL_TEXT } from '../constants';
@@ -14,23 +15,23 @@ const initializeGemini = (): GoogleGenAI | null => {
         try {
             apiKey = localStorage.getItem('geminiApiKey') || '';
         } catch {}
-        if (!apiKey) {
+    if (!apiKey) {
             apiKey = process.env.API_KEY || '';
         }
         if (!apiKey) {
             console.warn("Gemini API key is not set. AI features will be disabled.");
-            apiKeyStatus = 'missing';
-            return null;
-        }
-        ai = new GoogleGenAI({ apiKey });
-        apiKeyStatus = 'valid';
-        console.log("GoogleGenAI initialized successfully.");
-        return ai;
-    } catch (error: any) {
-        console.error("Error initializing GoogleGenAI:", error.message);
-        apiKeyStatus = 'missing';
-        return null;
+      apiKeyStatus = 'missing';
+      return null;
     }
+    ai = new GoogleGenAI({ apiKey });
+    apiKeyStatus = 'valid';
+    console.log("GoogleGenAI initialized successfully.");
+    return ai;
+  } catch (error: any) {
+    console.error("Error initializing GoogleGenAI:", error.message);
+        apiKeyStatus = 'missing';
+    return null;
+  }
 };
 
 
@@ -42,11 +43,15 @@ const parseJsonFromText = <T,>(text: string): T | null => {
     jsonStr = match[2].trim();
   }
 
+  // Pre-process to replace invalid escape sequence \$ with just $
+  // This addresses the "Bad escaped character in JSON" error for dollar signs.
+  jsonStr = jsonStr.replace(/\\\$`/g, '$');
+
   try {
     return JSON.parse(jsonStr) as T;
   } catch (e) {
-    console.error("Failed to parse JSON response from Gemini:", e, "Original text:", text);
-    const jsonMaybe = jsonStr.match(/(\[.*\]|{.*})/s); // Try to find array or object
+    console.error("Failed to parse JSON response from Gemini:", e, "Original text after pre-processing:", jsonStr, "Original text before pre-processing:", text);
+    const jsonMaybe = jsonStr.match(/(\[.*\]|{.*})/s); 
     if (jsonMaybe && jsonMaybe[0]) {
       try {
         return JSON.parse(jsonMaybe[0]) as T;
@@ -64,6 +69,8 @@ const generateGiftIdeas = async (
   allRecipientNames: string[] = [],
   customKnowledge?: string, 
   customExistingGifts?: AISuggestedGiftItem[], 
+  isImagePrompt: boolean = false,
+  hasCustomContext: boolean = false, // New parameter
   model: string = GEMINI_MODEL_TEXT
 ): Promise<SinglePersonGiftSuggestion[] | null> => {
   const genAI = initializeGemini();
@@ -77,48 +84,58 @@ const generateGiftIdeas = async (
   }
   
   const primaryTargetPerson = targetPersonNameInput || (allRecipientNames.length > 0 ? allRecipientNames[0] : DEFAULT_PERSON_SUGGESTION);
+  // isNewPersonCandidate is always false. The AI will map to existing names or the primaryTargetPerson.
   
   const jsonFormat = `
 [
   {
-    "personName": "string (Suggest a verbose name if possible, e.g., 'Triona (Wife)' based on query. If not in existing names, this is a new person candidate.)",
-    "isNewPersonCandidate": boolean (Set to true if 'personName' is NOT from the provided existing names list AND the query implies a new person. Otherwise false or omit.)",
-    "gifts": [
-      { "itemName": "string", "details": "string (optional description)" }
+    "personName": "string (MUST be from the existing names list: [${allRecipientNames.map(n => `"${n}"`).join(', ')}], or resolve to '${primaryTargetPerson}' if no clear match or if it's a general query for the primary target.)",
+    "gifts": [ 
+      { "itemName": "string (Specific product name or item described)", "details": "string (Detailed description. Include approximate price like '~\\$25' or 'range \\$50-\\$70', and potential vendor/store like 'from Amazon', 'local Etsy shop', 'Target', etc. If image prompt, extract this from image if possible.)" }
     ]
   }
-  // ... more entries if gifts for multiple people are found
+  // ... more entries if gifts for multiple existing people are clearly identified.
 ]`;
-  const existingNamesListString = allRecipientNames.length > 0 ? `[${allRecipientNames.map(n => `"${n}"`).join(', ')}]` : "[] (No existing lists)";
+  const existingNamesListString = allRecipientNames.length > 0 ? `[${allRecipientNames.map(n => `"${n}"`).join(', ')}]` : "[] (No existing people/lists)";
 
-  let customContextPrompt = "";
-  if (customKnowledge || (customExistingGifts && customExistingGifts.length > 0)) {
-    customContextPrompt += `\n\nIMPORTANT: You are currently generating highly PERSONALIZED recommendations for: "${primaryTargetPerson}".\n`;
-    if (customKnowledge) {
-      customContextPrompt += `- Knowledge about this person: "${customKnowledge}"\n`;
+  let systemInstruction = `You are an expert gift idea curator.
+You MUST ALWAYS associate gifts with an existing person from this list: ${existingNamesListString}.
+If no specific person is mentioned or identifiable for a gift, associate it with "${primaryTargetPerson}".
+NEVER suggest new people. The 'isNewPersonCandidate' concept is deprecated; all gifts are for known individuals or the primary target.
+
+RESPONSE RULES:
+1.  **Product Details:** For each gift, 'itemName' should be the specific product name or user-specified item. 'details' field: make descriptive, include approximate price and potential vendor/store. If image prompt, extract this from image.
+2.  **JSON Structure:** Respond STRICTLY with a JSON array of objects in the format: ${jsonFormat}. 'responseMimeType' is 'application/json'.
+3.  **Empty Result:** If no suitable gifts, return an empty array []. Do not add explanatory text outside the JSON.
+`;
+
+  if (hasCustomContext) { // Person is selected - AI should GENERATE recommendations
+    systemInstruction += `
+SPECIFIC TASK: GENERATE PERSONALIZED RECOMMENDATIONS for "${primaryTargetPerson}".
+- Knowledge about this person: "${customKnowledge || 'Not specified'}"
+- Their existing gift ideas (avoid exact duplicates, suggest complementary items): ${customExistingGifts && customExistingGifts.length > 0 ? JSON.stringify(customExistingGifts) : "None specified"}
+- Focus new suggestions primarily for THIS person. Provide ONLY ONE highly specific recommendation unless the user explicitly asks for more.
+`;
+    if (isImagePrompt) {
+      systemInstruction += `- If an image is provided, it's a product for "${primaryTargetPerson}". Identify it and provide details.`;
     }
-    if (customExistingGifts && customExistingGifts.length > 0) {
-      customContextPrompt += `- Their existing gift ideas (avoid exact duplicates, suggest complementary items): ${JSON.stringify(customExistingGifts)}\n`;
+  } else { // No person selected - AI should PARSE information or IDENTIFY from image
+    if (isImagePrompt) {
+      systemInstruction += `
+SPECIFIC TASK: ANALYZE IMAGE and associate with an EXISTING PERSON.
+- If image is a product photo: Identify it and its details. Associate with "${primaryTargetPerson}".
+- If image is a screenshot of text (e.g., a chat): Analyze text for gift wishes. If a recipient mentioned in the text matches a name in ${existingNamesListString}, associate the gift with them. Otherwise, associate with "${primaryTargetPerson}".
+`;
+    } else { // Text prompt, no custom context
+      systemInstruction += `
+SPECIFIC TASK: PARSE USER'S TEXT for gift items and assign to an EXISTING PERSON.
+- User's prompt likely contains specific gift items and potentially for whom. Extract these.
+- If a recipient mentioned in the prompt matches a name in ${existingNamesListString}, associate the gift with them.
+- If no specific recipient matches, or none mentioned, associate gift(s) with "${primaryTargetPerson}".
+- Do NOT generate new gift ideas beyond what the user explicitly states. Focus on parsing.
+`;
     }
-    customContextPrompt += "Focus your new suggestions primarily for THIS person, considering this specific knowledge and their existing gifts. General queries should also be tailored more towards this person if their custom context is active.\n";
   }
-
-
-  const systemInstruction = `You are an expert gift idea curator.
-The user has existing gift lists for these people: ${existingNamesListString}.${customContextPrompt}
-
-Analyze the input (text or image).
-- If the input suggests gifts for MULTIPLE people (whether existing or new), structure your response as a JSON array, one object per person.
-- For VERBOSE person names: If the user says "My wife Triona needs flowers", try to use "personName": "Triona (Wife)".
-- For EXISTING people: If "personName" matches an existing name from the list, "isNewPersonCandidate" MUST be false or omitted.
-- For NEW people: If the query implies a new person NOT in the list (e.g., "My cousin Sarah"), "personName" should be their name (e.g., "Sarah (Cousin)"), and "isNewPersonCandidate" MUST be true.
-- If the query is general (e.g., "ideas for everyone"), and multiple existing people are relevant, create entries for them. If it seems to imply a new person even in a general query, use "isNewPersonCandidate": true.
-- If it's completely unclear or no specific person, you can attribute to "${primaryTargetPerson}" and set "isNewPersonCandidate": false (if "${primaryTargetPerson}" is an existing name and no custom context is active) or true (if it's a new default suggestion or custom context is active for a new person).
-- If custom context for "${primaryTargetPerson}" is active, new suggestions should primarily be for them, even if the user's query is general.
-
-Respond STRICTLY with a JSON array of objects in the format: ${jsonFormat}
-If no gift ideas are found, return an empty array []. Do not add explanatory text outside the JSON.`;
-
 
   try {
     const response: GenerateContentResponse = await genAI.models.generateContent({
@@ -127,7 +144,7 @@ If no gift ideas are found, return an empty array []. Do not add explanatory tex
       config: {
         systemInstruction: systemInstruction,
         responseMimeType: "application/json",
-        temperature: customKnowledge || customExistingGifts ? 0.5 : 0.6, // Be more focused if custom context
+        temperature: hasCustomContext ? 0.4 : 0.2, // Lower temp for parsing, slightly higher for generation
       },
     });
     
@@ -136,25 +153,34 @@ If no gift ideas are found, return an empty array []. Do not add explanatory tex
       console.error("Gemini API returned no text response.");
       return null;
     }
+    // console.warn("System Instruction (Gemini Service):", systemInstruction); // For debugging
+    // console.warn("AI Raw Response (Gemini Service):", textResponse); // For debugging
     
-    const parsedSuggestions = parseJsonFromText<SinglePersonGiftSuggestion[]>(textResponse);
+    let parsedSuggestions = parseJsonFromText<any[]>(textResponse); // Use any[] initially for flexibility
     
     if (parsedSuggestions && Array.isArray(parsedSuggestions)) {
         const validatedSuggestions: SinglePersonGiftSuggestion[] = [];
-        for (const suggestion of parsedSuggestions) {
-            if (suggestion.personName && suggestion.gifts && Array.isArray(suggestion.gifts)) {
-                let currentPersonName = suggestion.personName;
-                let isNewCandidate = suggestion.isNewPersonCandidate || false;
-
-                if (isNewCandidate && allRecipientNames.length > 0 && allRecipientNames.includes(currentPersonName)) {
-                    isNewCandidate = false;
+        for (const rawSuggestion of parsedSuggestions) {
+            // Ensure personName is valid and from the existing list, or defaults to primaryTargetPerson
+            let finalPersonName = primaryTargetPerson; // Default
+            if (rawSuggestion.personName && typeof rawSuggestion.personName === 'string') {
+                const matchedName = allRecipientNames.find(name => name.toLowerCase() === rawSuggestion.personName.toLowerCase());
+                if (matchedName) {
+                    finalPersonName = matchedName;
+                } else if (allRecipientNames.includes(rawSuggestion.personName)) {
+                    finalPersonName = rawSuggestion.personName;
                 }
-                
-                if (currentPersonName) {
+                // If no match, it defaults to primaryTargetPerson as initialized
+            }
+
+            if (finalPersonName && rawSuggestion.gifts && Array.isArray(rawSuggestion.gifts) && rawSuggestion.gifts.length > 0) {
+                 const validGifts = rawSuggestion.gifts.filter((g: any) => g.itemName && typeof g.itemName === 'string' && g.itemName.trim() !== "")
+                                                    .map((g: any) => ({ itemName: g.itemName, details: g.details || '' }));
+                if (validGifts.length > 0) {
                     validatedSuggestions.push({
-                        personName: currentPersonName,
-                        isNewPersonCandidate: isNewCandidate,
-                        gifts: suggestion.gifts.filter(g => g.itemName && g.itemName.trim() !== "") 
+                        personName: finalPersonName,
+                        // isNewPersonCandidate will be omitted or always false client-side
+                        gifts: validGifts
                     });
                 }
             }
@@ -162,30 +188,37 @@ If no gift ideas are found, return an empty array []. Do not add explanatory tex
         return validatedSuggestions;
     } else if (typeof parsedSuggestions === 'object' && parsedSuggestions !== null && 'personName' in parsedSuggestions && 'gifts' in parsedSuggestions) {
         console.warn("AI returned a single object, expected an array. Wrapping it.");
-        const singleSuggestion = parsedSuggestions as SinglePersonGiftSuggestion;
-         let currentPersonName = singleSuggestion.personName;
-         let isNewCandidate = singleSuggestion.isNewPersonCandidate || false;
-         if (isNewCandidate && allRecipientNames.length > 0 && allRecipientNames.includes(currentPersonName)) {
-            isNewCandidate = false;
-         }
-         if (currentPersonName && singleSuggestion.gifts && Array.isArray(singleSuggestion.gifts)) {
-            return [{ 
-                personName: currentPersonName, 
-                isNewPersonCandidate: isNewCandidate, 
-                gifts: singleSuggestion.gifts.filter(g => g.itemName && g.itemName.trim() !== "") 
-            }];
+        const singleSuggestion = parsedSuggestions as any;
+        let finalPersonName = primaryTargetPerson;
+        if (singleSuggestion.personName && typeof singleSuggestion.personName === 'string') {
+            const matchedName = allRecipientNames.find(name => name.toLowerCase() === singleSuggestion.personName.toLowerCase());
+            if (matchedName) {
+                finalPersonName = matchedName;
+            } else if (allRecipientNames.includes(singleSuggestion.personName)) {
+                finalPersonName = singleSuggestion.personName;
+            }
+        }
+
+         if (finalPersonName && singleSuggestion.gifts && Array.isArray(singleSuggestion.gifts) && singleSuggestion.gifts.length > 0) {
+            const validGifts = singleSuggestion.gifts.filter((g: any) => g.itemName && typeof g.itemName === 'string' && g.itemName.trim() !== "")
+                                                  .map((g: any) => ({ itemName: g.itemName, details: g.details || '' }));
+            if (validGifts.length > 0) {
+                return [{ 
+                    personName: finalPersonName, 
+                    gifts: validGifts
+                }];
+            }
          }
          return null;
     } else {
-        console.error("Parsed JSON is not in the expected SinglePersonGiftSuggestion[] format:", parsedSuggestions);
+        console.error("Parsed JSON is not in the expected SinglePersonGiftSuggestion[] format or is empty:", parsedSuggestions);
         return null;
     }
 
   } catch (error: any) {
-    console.error("Error generating gift ideas with Gemini:", error.message);
-    // Check for specific API key error messages if the SDK throws them directly
+    console.error("Error generating gift ideas with Gemini:", error.message, error.stack);
     if (error.message && (error.message.includes("API key not valid") || error.message.includes("API_KEY_INVALID"))) {
-        apiKeyStatus = 'error'; // Or 'missing' if that's more appropriate
+        apiKeyStatus = 'error'; 
         throw new Error("Gemini API key is not valid or missing. Please ensure `process.env.API_KEY` is correctly set.");
     }
     throw error; 
@@ -195,21 +228,23 @@ If no gift ideas are found, return an empty array []. Do not add explanatory tex
 export const geminiService = {
   generateGiftIdeasFromText: async (
     text: string, 
-    targetPersonName: string, 
+    targetPersonName: string, // This is primaryTargetPerson
     allRecipientNames: string[],
     customKnowledge?: string,
-    customExistingGifts?: AISuggestedGiftItem[]
+    customExistingGifts?: AISuggestedGiftItem[],
+    hasCustomContext: boolean = false // Pass this down
     ): Promise<SinglePersonGiftSuggestion[] | null> => {
-    return generateGiftIdeas({ parts: [{ text: text }] }, targetPersonName, allRecipientNames, customKnowledge, customExistingGifts);
+    return generateGiftIdeas({ parts: [{ text: text }] }, targetPersonName, allRecipientNames, customKnowledge, customExistingGifts, false, hasCustomContext);
   },
 
   generateGiftIdeasFromImage: async (
     base64ImageData: string,
     mimeType: string,
-    targetPersonName: string,
+    targetPersonName: string, // This is primaryTargetPerson
     allRecipientNames: string[],
     customKnowledge?: string,
-    customExistingGifts?: AISuggestedGiftItem[]
+    customExistingGifts?: AISuggestedGiftItem[],
+    hasCustomContext: boolean = false // Pass this down
   ): Promise<SinglePersonGiftSuggestion[] | null> => {
     const imagePart = {
       inlineData: {
@@ -217,25 +252,21 @@ export const geminiService = {
         data: base64ImageData,
       },
     };
-    // Construct a more targeted text part if custom context is available
-    let textPromptForImage = `Analyze this image for potential gift ideas.`;
-    if (customKnowledge || customExistingGifts) {
-        textPromptForImage += ` Focus on suggestions suitable for ${targetPersonName}.`;
-        if (customKnowledge) textPromptForImage += ` This person's interests include: ${customKnowledge}.`;
-        if (customExistingGifts && customExistingGifts.length > 0) textPromptForImage += ` They already have these ideas: ${customExistingGifts.map(g=>g.itemName).join(', ')}.`;
+    
+    let textPromptForImage = "";
+    if (hasCustomContext) {
+      textPromptForImage = `This image contains a product idea for ${targetPersonName}. Identify it. Consider their interests: ${customKnowledge || 'N/A'}. They already have ideas: ${customExistingGifts && customExistingGifts.length > 0 ? customExistingGifts.map(g=>g.itemName).join(', ') : 'None'}.`;
     } else {
-        textPromptForImage += ` Consider items for people like ${targetPersonName} or others in this list: ${allRecipientNames.join(', ')}.`;
+      textPromptForImage = `Analyze this image. If it's a product, describe it. If it's a screenshot with text (like a chat), extract any gift wishes mentioned in the text. For any items/wishes found, try to associate them with an existing person if mentioned (from list: ${allRecipientNames.join(', ')}), otherwise associate with ${targetPersonName}.`;
     }
-     textPromptForImage += ` If you identify a new person, use the 'isNewPersonCandidate' flag.`;
-
 
     const textPart = { text: textPromptForImage };
-    return generateGiftIdeas({ parts: [imagePart, textPart] }, targetPersonName, allRecipientNames, customKnowledge, customExistingGifts);
+    return generateGiftIdeas({ parts: [imagePart, textPart] }, targetPersonName, allRecipientNames, customKnowledge, customExistingGifts, true, hasCustomContext);
   },
   
   getApiKeyStatus: (): typeof apiKeyStatus => {
     if (apiKeyStatus === 'unknown') { 
-        initializeGemini(); // Attempt to initialize if status is unknown
+        initializeGemini();
     }
     return apiKeyStatus;
   }

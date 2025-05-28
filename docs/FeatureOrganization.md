@@ -26,14 +26,16 @@ The application is organized to separate concerns, making it easier to manage an
 -   **`contexts/`**: For React Context API providers.
     -   `AppDataContext.tsx`: Manages global application state by aggregating data and actions from individual feature modules. Handles data persistence, migration, and global actions (export/import, utility settings).
     -   `ThemeContext.tsx`: Manages application theme (light/dark).
--   **`features/`**: Core directory for distinct application utilities. Each subdirectory represents a utility (e.g., `weight-tracker/`, `gift-assistant/`). See [Feature Directory Structure](#feature-directory-structure) for details.
+-   **`features/`**: Core directory for distinct application utilities. Each subdirectory represents a utility (e.g., `weight-tracker/`, `gift-assistant/`, `docs-viewer/`). See [Feature Directory Structure](#feature-directory-structure) for details.
 -   **`hooks/`**: Custom React Hooks (e.g., `useLocalStorage.ts`).
 -   **`services/`**: Modules for external APIs (e.g., `geminiService.ts`).
 -   **`types.ts`**: Global TypeScript type definitions.
 -   **`constants.ts`**: Truly global application-wide constants (e.g., `UTILITY_IDS`, `DEFAULT_UTILITY_SETTINGS`). Feature-specific constants are located within their feature directory.
 -   **`sampleData.ts`**: Aggregates sample data slices from individual feature modules to provide comprehensive sample data for development and testing (e.g., `AI_STUDIO_SAMPLE_DATA`).
--   **`utils/`**: General utility functions (e.g., `workoutHelper.ts`).
--   **`App.tsx`**, **`index.tsx`**, **`index.html`**, **`metadata.json`**, **`docs/`**: Standard project files.
+-   **`utils/`**: General utility functions (e.g., `workoutHelper.ts`, `workoutOptimizer.ts`).
+-   **`App.tsx`**, **`index.tsx`**, **`index.html`**, **`metadata.json`**: Standard project files.
+-   **`docs/`**: Contains Markdown documentation files for the project.
+    -   `docs/changes/`: Subdirectory for changelog or specific update analysis documents.
 
 
 ## Feature Directory Structure
@@ -41,12 +43,12 @@ The application is organized to separate concerns, making it easier to manage an
 Each utility resides in its own subdirectory within `features/`. For example, `features/weight-tracker/`. A typical feature directory now includes:
 
 -   **`FeatureNamePage.tsx`**: The main React component for the feature's UI (e.g., `WeightTrackerPage.tsx`).
--   **`utilityName.constants.ts`**: Constants that are specific to this utility (e.g., `disneyCollection.constants.ts` holds `DISNEY_ANIMATED_CLASSICS`).
+-   **`utilityName.constants.ts`**: Constants that are specific to this utility (e.g., `disneyCollection.constants.ts` holds `DISNEY_ANIMATED_CLASSICS`; `docsViewer.constants.ts` lists available documents).
 -   **`utilityName.data.ts`**: Manages the data logic for this utility. It typically exports:
-    *   `initialUtilityNameData`: An object representing the initial state slice for this utility (e.g., `{ weightEntries: [] }`).
+    *   `initialUtilityNameData`: An object representing the initial state slice for this utility (e.g., `{ weightEntries: [] }`). For utilities like Docs Viewer that don't store global state, this might be minimal or empty.
     *   `createUtilityNameActions(setAppData, getAppData)`: A function that returns an object of action functions specific to this utility (e.g., `addWeightEntry`, `updateWeightEntry`). These actions are then integrated into the global `AppDataContext`.
     *   `UtilityNameActions` (type): The TypeScript type for the actions object.
--   **`utilityName.sample.ts`**: Contains the sample data specific to this utility, which is then aggregated by the root `sampleData.ts`.
+-   **`utilityName.sample.ts`**: Contains the sample data specific to this utility, which is then aggregated by the root `sampleData.ts`. For some utilities like Docs Viewer, this may be empty.
 -   **`components/`** (optional): Subdirectory for React components specific to this feature.
 -   **`hooks/`** (optional): Custom React Hooks used exclusively by this feature.
 -   **`utils/`** (optional): Utility functions relevant only to this feature.
@@ -204,8 +206,7 @@ Let's say we want to add a simple "Super Counter" utility that just increments a
 6.  **Update Global Types and Constants:**
     *   **`types.ts`**:
         *   Add `'superCounter'` to `UtilityId`: `export type UtilityId = ... | 'superCounter';`
-        *   Update `AppData` interface: `interface AppData { ...; superCounterValue: number; }`
-        *   (The `SuperCounterActions` type is defined in `superCounter.data.ts` and will be merged in `AppDataContext.tsx`.)
+        *   Update `AppData` interface: `interface AppData { ...; superCounterValue: number; }` (If the utility needs to store data in the global `AppData` object. Docs Viewer, for example, does not currently store data there.)
     *   **`constants.ts`**:
         *   Add to `UTILITY_IDS`: `SUPER_COUNTER: 'superCounter' as UtilityId,`
         *   Add to `DEFAULT_UTILITY_SETTINGS`: `{ id: UTILITY_IDS.SUPER_COUNTER as UtilityId, name: "Super Counter", enabled: true, showInMoreMenu: false },`
@@ -218,14 +219,14 @@ Let's say we want to add a simple "Super Counter" utility that just increments a
         // ...
         export const AI_STUDIO_SAMPLE_DATA: AppData = {
           // ... other sample data slices
-          ...sampleSuperCounterValue,
+          ...sampleSuperCounterValue, // If it adds to AppData
           // ...
         };
         ```
 
 8.  **Update `AppDataContext.tsx`:**
-    *   Import `initialSuperCounterData`, `createSuperCounterActions`, and `SuperCounterActions` from `features/super-counter/superCounter.data.ts`.
-    *   Add `...initialSuperCounterData` to the spread that forms `initialAppData`.
+    *   Import `initialSuperCounterData` (if any), `createSuperCounterActions`, and `SuperCounterActions` from `features/super-counter/superCounter.data.ts`.
+    *   Add `...initialSuperCounterData` to the spread that forms `initialAppData` (if any).
     *   Add `SuperCounterActions` to the `AppDataContextType` union.
     *   Instantiate actions: `const superCounterActions = createSuperCounterActions(setAppData, getAppData);`
     *   Spread `...superCounterActions` into the `contextValue`.

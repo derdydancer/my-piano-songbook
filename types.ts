@@ -1,3 +1,4 @@
+
 export interface WeightEntry {
   id: string;
   date: string; // ISO string
@@ -58,10 +59,10 @@ export interface SinglePersonGiftSuggestion {
 }
 // The Gemini service will return an array: SinglePersonGiftSuggestion[]
 
-export type ActivePage = 'weight' | 'disney' | 'gifts' | 'settings' | 'train' | 'workouts' | 'more' | 'bar-loader-tester';
+export type ActivePage = 'weight' | 'disney' | 'gifts' | 'settings' | 'train' | 'workouts' | 'more' | 'bar-loader-tester' | 'docs-viewer';
 
 // --- App Utilities Settings ---
-export type UtilityId = 'weight' | 'disney' | 'gifts' | 'train' | 'settings' | 'barLoaderTester';
+export type UtilityId = 'weight' | 'disney' | 'gifts' | 'train' | 'settings' | 'barLoaderTester' | 'docsViewer';
 
 export interface UtilitySetting {
   id: UtilityId;
@@ -152,6 +153,8 @@ export interface AppData {
   workoutSessions: WorkoutSession[];
   // Bar Loader Tester specific data (if any becomes persistent)
   // barLoaderTesterData?: any; 
+  // Docs Viewer specific data (if any becomes persistent)
+  // docsViewerData?: any;
 }
 
 export type MoreMenuPosition = 'bottom' | 'top'; // Example, might not be needed if popover fixed
