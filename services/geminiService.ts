@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { SinglePersonGiftSuggestion, AISuggestedGiftItem } from '../types';
 import { GEMINI_MODEL_TEXT } from '../constants';
@@ -8,27 +7,30 @@ let ai: GoogleGenAI | null = null;
 let apiKeyStatus: 'unknown' | 'valid' | 'missing' | 'error' = 'unknown';
 
 const initializeGemini = (): GoogleGenAI | null => {
-  if (ai && apiKeyStatus === 'valid') return ai;
-  
-  // Prevent re-initialization if already determined to be missing or error
-  if (apiKeyStatus === 'missing' || apiKeyStatus === 'error') return null;
-
-  try {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      console.warn("Gemini API key is not set in process.env.API_KEY. AI features will be disabled.");
-      apiKeyStatus = 'missing';
-      return null;
+    if (ai) return ai;
+    try {
+        // Try localStorage first, then fallback to env
+        let apiKey = '';
+        try {
+            apiKey = localStorage.getItem('geminiApiKey') || '';
+        } catch {}
+        if (!apiKey) {
+            apiKey = process.env.API_KEY || '';
+        }
+        if (!apiKey) {
+            console.warn("Gemini API key is not set. AI features will be disabled.");
+            apiKeyStatus = 'missing';
+            return null;
+        }
+        ai = new GoogleGenAI({ apiKey });
+        apiKeyStatus = 'valid';
+        console.log("GoogleGenAI initialized successfully.");
+        return ai;
+    } catch (error: any) {
+        console.error("Error initializing GoogleGenAI:", error.message);
+        apiKeyStatus = 'missing';
+        return null;
     }
-    ai = new GoogleGenAI({ apiKey });
-    apiKeyStatus = 'valid';
-    console.log("GoogleGenAI initialized successfully.");
-    return ai;
-  } catch (error: any) {
-    console.error("Error initializing GoogleGenAI:", error.message);
-    apiKeyStatus = 'error';
-    return null;
-  }
 };
 
 
