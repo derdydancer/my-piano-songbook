@@ -11,7 +11,7 @@ import { PlusCircleIcon, TrashIcon, PencilIcon, MicrophoneIcon, PhotoIcon, Infor
 import { geminiService } from '../../services/geminiService';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { DEFAULT_PERSON_SUGGESTION } from '../../constants';
-import CollapsibleSection from '../../features/settings/components/CollapsibleSection'; 
+import CollapsibleSection from '../../components/common/CollapsibleSection'; // Updated import path
 
 const GiftAssistantPage: React.FC = () => {
   const {
