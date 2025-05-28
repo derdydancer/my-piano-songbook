@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAppData } from '../../contexts/AppDataContext';
 import { WorkoutDefinition, WorkoutSession, ExerciseLog, SetDetails, LiftType, ActiveSetInfo, PlateCombination, WorkoutMode } from '../../types';
@@ -8,27 +9,32 @@ import Input from '../../components/common/Input';
 import { PlusCircleIcon, RefreshCwIcon, CheckCircleIcon, XCircleIcon, ChevronDownIcon, ChevronUpIcon, MinusIcon, PlusIcon, ArrowLeftIcon } from '../../components/common/Icons';
 import LoadingSpinner from '../../components/LoadingSpinner';
 import { formatPlateCombination, findClosestLoadableWeight, findNextLoadableWeight } from '../../utils/workoutHelper';
-import { BAR_WEIGHT, DEFAULT_TIMER_WARMUP_SECONDS, DEFAULT_TIMER_WORKSET_SECONDS, WORKOUT_DEFINITIONS } from '../../constants';
+import { BAR_WEIGHT, DEFAULT_TIMER_WARMUP_SECONDS, DEFAULT_TIMER_WORKSET_SECONDS, WORKOUT_DEFINITIONS as APP_WORKOUT_DEFINITIONS } from './workoutTracker.constants'; // Renamed import
 import BarbellVisualizer from './components/BarbellVisualizer';
 import SetTimer from './components/SetTimer';
 import ExerciseProgressBar from './components/ExerciseProgressBar';
+import ActiveWorkoutSetsDisplay from './components/ActiveWorkoutSetsDisplay';
+
 
 const WorkoutTrackerPage: React.FC = () => {
   const {
     getAvailableWorkoutDefinitions,
-    getLastWorkoutSession,
-    getAllWorkoutSessions,
+    getLastWorkoutSession, // Still useful for displaying last session of specific type
+    getAllWorkoutSessions, // Used for determining next workout type
     getProposedWorksetWeight,
     generateSetsForExercise,
     addWorkoutSession,
-    exerciseSettings,
-    plateInventory,
+    getExerciseSettings,
+    getPlateInventory,
   } = useAppData();
+
+  const exerciseSettings = getExerciseSettings();
+  const plateInventory = getPlateInventory();
 
   const [workoutMode, setWorkoutMode] = useState<WorkoutMode>('setup');
   const [availableWorkouts, setAvailableWorkouts] = useState<WorkoutDefinition[]>([]);
   const [selectedWorkoutDef, setSelectedWorkoutDef] = useState<WorkoutDefinition | null>(null);
-  const [lastSpecificSession, setLastSpecificSession] = useState<WorkoutSession | null>(null);
+  const [lastSpecificSessionDisplay, setLastSpecificSessionDisplay] = useState<WorkoutSession | null>(null);
   
   const [currentWorkoutSession, setCurrentWorkoutSession] = useState<WorkoutSession | null>(null);
   const [editableExerciseLogs, setEditableExerciseLogs] = useState<ExerciseLog[]>([]);
@@ -41,7 +47,7 @@ const WorkoutTrackerPage: React.FC = () => {
     const definition = currentDefinitions.find(def => def.name === definitionName);
     if (definition) {
       setSelectedWorkoutDef(definition);
-      setLastSpecificSession(getLastWorkoutSession(definition.name) || null);
+      setLastSpecificSessionDisplay(getLastWorkoutSession(definition.name) || null); // For display of last *specific* A/B
       
       let runningPlateConfig: PlateCombination | undefined = undefined;
       const proposedLogs: ExerciseLog[] = definition.exercises.map(exDef => {
@@ -53,7 +59,7 @@ const WorkoutTrackerPage: React.FC = () => {
       setEditableExerciseLogs(proposedLogs);
     } else {
       setSelectedWorkoutDef(null);
-      setLastSpecificSession(null);
+      setLastSpecificSessionDisplay(null);
       setEditableExerciseLogs([]);
     }
   }, [getLastWorkoutSession, getProposedWorksetWeight, generateSetsForExercise]);
@@ -63,16 +69,24 @@ const WorkoutTrackerPage: React.FC = () => {
     setAvailableWorkouts(definitions);
 
     if (definitions.length > 0 && workoutMode === 'setup') {
-        const allSessions = getAllWorkoutSessions();
-        const mostRecentGlobalSession = allSessions[0];
-        let defaultWorkoutName = definitions[0].name;
+        const allSessions = getAllWorkoutSessions(); // Chronologically sorted, newest first
+        const mostRecentGlobalSession = allSessions[0]; // The very last workout done
+        let defaultWorkoutName = definitions[0].name; // Fallback
 
-        if (mostRecentGlobalSession) {
-            if (mostRecentGlobalSession.workoutDefinitionName === WORKOUT_DEFINITIONS[0]?.name && definitions.find(d => d.name === WORKOUT_DEFINITIONS[1]?.name)) {
-                defaultWorkoutName = WORKOUT_DEFINITIONS[1].name;
-            } else if (mostRecentGlobalSession.workoutDefinitionName === WORKOUT_DEFINITIONS[1]?.name && definitions.find(d => d.name === WORKOUT_DEFINITIONS[0]?.name)) {
-                defaultWorkoutName = WORKOUT_DEFINITIONS[0].name;
+        if (mostRecentGlobalSession && APP_WORKOUT_DEFINITIONS.length >= 2) {
+            const workoutADef = definitions.find(d => d.name === APP_WORKOUT_DEFINITIONS[0]?.name);
+            const workoutBDef = definitions.find(d => d.name === APP_WORKOUT_DEFINITIONS[1]?.name);
+
+            if (mostRecentGlobalSession.workoutDefinitionName === APP_WORKOUT_DEFINITIONS[0]?.name && workoutBDef) {
+                defaultWorkoutName = APP_WORKOUT_DEFINITIONS[1].name; // If A was last, suggest B
+            } else if (mostRecentGlobalSession.workoutDefinitionName === APP_WORKOUT_DEFINITIONS[1]?.name && workoutADef) {
+                defaultWorkoutName = APP_WORKOUT_DEFINITIONS[0].name; // If B was last, suggest A
+            } else if (workoutADef){ // If last workout was neither A nor B (or definitions changed), default to A if available
+                defaultWorkoutName = APP_WORKOUT_DEFINITIONS[0].name;
+            } else if (workoutBDef) { // Or B if A not available
+                 defaultWorkoutName = APP_WORKOUT_DEFINITIONS[1].name;
             }
+            // If neither A nor B are in current definitions, the initial fallback (definitions[0].name) is used.
         }
         updateSetupScreenData(defaultWorkoutName, definitions);
     } else if (definitions.length === 0) {
@@ -258,7 +272,7 @@ const WorkoutTrackerPage: React.FC = () => {
     return <div className="p-4"><LoadingSpinner message="Loading workout definitions..." /></div>;
   }
   if (availableWorkouts.length === 0 && workoutMode === 'setup') { 
-    return <div className="p-4 text-center text-textSecondary">No workout definitions found. Configure them in constants.ts.</div>;
+    return <div className="p-4 text-center text-textSecondary">No workout definitions found. Configure them in workoutTracker.constants.ts.</div>;
   }
 
 
@@ -275,12 +289,12 @@ const WorkoutTrackerPage: React.FC = () => {
             onChange={(e) => updateSetupScreenData(e.target.value, availableWorkouts)}
           />
 
-          {lastSpecificSession && (
+          {lastSpecificSessionDisplay && (
             <div className="bg-card p-3 rounded-lg shadow">
               <h3 className="text-md font-semibold text-textPrimary mb-1">Last {selectedWorkoutDef.name}:</h3>
-              <p className="text-xs text-textSecondary">Date: {new Date(lastSpecificSession.date).toLocaleDateString()}</p>
+              <p className="text-xs text-textSecondary">Date: {new Date(lastSpecificSessionDisplay.date).toLocaleDateString()}</p>
               <ul className="text-xs mt-1 space-y-0.5">
-                {lastSpecificSession.exercises.map(ex => (
+                {lastSpecificSessionDisplay.exercises.map(ex => (
                   <li key={ex.lift}>{ex.lift}: {ex.worksetWeight}kg - {ex.sets.filter(s=>s.type==='workset').map(s => s.status === 'completed' ? `${s.completedReps || s.targetReps}r` : `${s.completedReps || 0}/${s.targetReps}r(${s.status})`).join(', ')}</li>
                 ))}
               </ul>
@@ -300,7 +314,7 @@ const WorkoutTrackerPage: React.FC = () => {
                     <Button size="sm" variant="secondary" onClick={() => handleAdjustWorksetWeight(exIndex, 'increment')}><PlusIcon className="w-4 h-4"/></Button>
                     <Button size="sm" variant="secondary" onClick={() => handleAdjustWorksetWeight(exIndex, 'add10')}>+10kg</Button>
                  </div>
-                 <p className="text-xs text-textSecondary mt-1">Progression: {exerciseSettings[exLog.lift]?.progressionIncrement || 2.5}kg. Last achieved: {exerciseSettings[exLog.lift]?.lastAchievedWorksetWeight || BAR_WEIGHT}kg</p>
+                 <p className="text-xs text-textSecondary mt-1">Progression Inc: {exerciseSettings[exLog.lift]?.progressionIncrement || 2.5}kg. Last achieved for {exLog.lift}: {exerciseSettings[exLog.lift]?.lastAchievedWorksetWeight || BAR_WEIGHT}kg</p>
               </div>
               <p className="text-sm text-textSecondary">Warmups & Worksets will be based on this weight.</p>
               {exLog.sets && exLog.sets.length > 0 && (
@@ -329,13 +343,15 @@ const WorkoutTrackerPage: React.FC = () => {
             {currentWorkoutSession.workoutDefinitionName} - In Progress
           </h2>
 
+          {/* Overall Progress Bars (can be kept or removed based on preference) */}
           <div className="bg-card p-3 rounded-lg shadow space-y-2">
-            <h3 className="text-md font-semibold text-textPrimary mb-1">Overall Progress:</h3>
+            <h3 className="text-md font-semibold text-textPrimary mb-1">Overall Workout Progress:</h3>
             {currentWorkoutSession.exercises.map(exLog => (
                 <ExerciseProgressBar key={exLog.lift} exerciseLog={exLog} />
             ))}
           </div>
           
+          {/* Main Active Set Info */}
           <div className="bg-card p-4 rounded-lg shadow text-center">
             <h3 className="text-2xl font-bold text-primary">{activeSetInfo.currentLift}</h3>
             <p className="text-lg text-textPrimary">
@@ -346,6 +362,13 @@ const WorkoutTrackerPage: React.FC = () => {
             <p className="text-4xl font-bold text-textPrimary my-3">
               {activeSetInfo.currentSet.actualWeight} kg x {activeSetInfo.currentSet.targetReps} reps
             </p>
+
+            {/* Performed/Upcoming Sets Display for Current Exercise */}
+            <ActiveWorkoutSetsDisplay 
+                currentExerciseLog={currentWorkoutSession.exercises[activeSetInfo.exerciseIndex]}
+                activeSetId={activeSetInfo.currentSet.id}
+                totalSetsInExercise={currentWorkoutSession.exercises[activeSetInfo.exerciseIndex].sets.length}
+            />
             
             <SetTimer 
               key={activeSetInfo.currentSet.id} // React key for re-mounting

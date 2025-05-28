@@ -7,6 +7,14 @@ interface TextAreaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement
   containerClassName?: string;
 }
 
+/**
+ * A generic textarea component for multi-line text input.
+ *
+ * @remarks
+ * Used by:
+ * - Weight Tracker: WeightFormModal (Notes).
+ * - Gift Assistant: GiftItemFormModal (Details), ListFormModal (Knowledge), AI Prompt input.
+ */
 const TextArea: React.FC<TextAreaProps> = ({ label, id, error, className = '', containerClassName = '', ...props }) => {
   const baseStyles = 'mt-1 block w-full px-3 py-2 bg-card border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-textPrimary dark:text-textPrimary';
   const errorStyles = 'border-red-500 focus:ring-red-500 focus:border-red-500';

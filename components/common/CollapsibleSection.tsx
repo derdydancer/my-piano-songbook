@@ -1,6 +1,6 @@
 
 import React, { useState, ReactNode } from 'react';
-import { ChevronDownIcon, ChevronUpIcon } from './Icons'; // Adjusted import path
+import { ChevronDownIcon, ChevronUpIcon } from './Icons'; 
 
 interface CollapsibleSectionProps {
   title: string;
@@ -9,6 +9,15 @@ interface CollapsibleSectionProps {
   headerContent?: ReactNode; // Optional additional content for the header
 }
 
+/**
+ * A component that creates a collapsible section with a title.
+ * The section can be toggled open or closed.
+ *
+ * @remarks
+ * Used by:
+ * - Gift Assistant: To collapse/expand individual gift recipient lists and AI suggestion sections.
+ * - Settings: To group different settings categories (General, Utility-specific).
+ */
 const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children, initialOpen = false, headerContent }) => {
   const [isOpen, setIsOpen] = useState(initialOpen);
 

@@ -7,6 +7,17 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   containerClassName?: string;
 }
 
+/**
+ * A generic input field component.
+ *
+ * @remarks
+ * Used by:
+ * - Weight Tracker: WeightFormModal (Date, Weight).
+ * - Disney Collection: Search bar.
+ * - Gift Assistant: GiftItemFormModal (Item Name, Tags), ListFormModal (List Name).
+ * - Settings: Plate inventory modal (Quantity), Exercise progression inputs.
+ * - Workout Tracker: Failed set reps input.
+ */
 const Input: React.FC<InputProps> = ({ label, id, error, className = '', containerClassName = '', ...props }) => {
   const baseStyles = 'mt-1 block w-full px-3 py-2 bg-card border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm text-textPrimary dark:text-textPrimary';
   const errorStyles = 'border-red-500 focus:ring-red-500 focus:border-red-500';

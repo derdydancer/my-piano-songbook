@@ -1,10 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAppData } from '../../contexts/AppDataContext';
-import { DISNEY_ANIMATED_CLASSICS } from '../../constants';
+import { DISNEY_ANIMATED_CLASSICS } from './disneyCollection.constants'; // Corrected import path
 import { DisneyClassic, DisneyOwnedStatus } from '../../types';
 import { CheckCircleIcon, XCircleIcon } from '../../components/common/Icons';
 import Input from '../../components/common/Input';
+import Button from '../../components/common/Button'; // Added for filter buttons
+
+type FilterState = 'all' | 'owned' | 'unowned';
 
 const DisneyTitleItem: React.FC<{
   classic: DisneyClassic;
@@ -20,21 +23,23 @@ const DisneyTitleItem: React.FC<{
         <h3 className="font-semibold text-textPrimary">{classic.id}. {classic.title}</h3>
         <p className="text-sm text-textSecondary">{classic.year}</p>
       </div>
-      <div className="flex space-x-4">
+      <div className="flex space-x-2 sm:space-x-4">
         {(['dvd', 'bluray'] as const).map(format => (
-          <button
+          <Button
             key={format}
             onClick={() => onUpdate(classic.id, format, format === 'dvd' ? !ownedDvd : !ownedBluRay)}
-            className={`flex items-center space-x-1 px-3 py-1.5 rounded-md text-sm transition-colors
+            variant="ghost"
+            size="sm"
+            className={`
               ${(format === 'dvd' && ownedDvd) || (format === 'bluray' && ownedBluRay)
-                ? 'bg-green-100 dark:bg-green-700 text-green-700 dark:text-green-200'
+                ? 'bg-green-100 dark:bg-green-700 text-green-700 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-600'
                 : 'bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-500'}`}
           >
             {(format === 'dvd' && ownedDvd) || (format === 'bluray' && ownedBluRay)
-              ? <CheckCircleIcon className="w-4 h-4" />
-              : <XCircleIcon className="w-4 h-4 opacity-50" />}
-            <span>{format.toUpperCase()}</span>
-          </button>
+              ? <CheckCircleIcon className="w-4 h-4 mr-1" />
+              : <XCircleIcon className="w-4 h-4 mr-1 opacity-50" />}
+            {format.toUpperCase()}
+          </Button>
         ))}
       </div>
     </li>
@@ -44,11 +49,22 @@ const DisneyTitleItem: React.FC<{
 const DisneyCollectionPage: React.FC = () => {
   const { disneyCollection, updateDisneyOwnedStatus, getDisneyOwnedStatus } = useAppData();
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterState, setFilterState] = useState<FilterState>('all');
 
-  const filteredClassics = DISNEY_ANIMATED_CLASSICS.filter(classic =>
-    classic.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    classic.year.toString().includes(searchTerm)
-  );
+  const filteredClassics = useMemo(() => {
+    return DISNEY_ANIMATED_CLASSICS.filter(classic => {
+      const matchesSearch = classic.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            classic.year.toString().includes(searchTerm);
+      if (!matchesSearch) return false;
+
+      const status = getDisneyOwnedStatus(classic.id);
+      const isOwned = status?.ownedDvd || status?.ownedBluRay;
+
+      if (filterState === 'owned') return isOwned;
+      if (filterState === 'unowned') return !isOwned;
+      return true; // 'all'
+    });
+  }, [searchTerm, filterState, getDisneyOwnedStatus]);
   
   const totalOwned = disneyCollection.filter(s => s.ownedBluRay || s.ownedDvd).length;
   const totalDvds = disneyCollection.filter(s => s.ownedDvd).length;
@@ -68,13 +84,28 @@ const DisneyCollectionPage: React.FC = () => {
         </div>
       </div>
 
-      <Input
-        type="text"
-        placeholder="Search by title or year..."
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-        containerClassName="mb-0"
-      />
+      <div className="flex flex-col sm:flex-row gap-2 items-center">
+        <div className="flex space-x-1 p-0.5 bg-gray-200 dark:bg-gray-700 rounded-md">
+          {(['all', 'owned', 'unowned'] as FilterState[]).map(state => (
+            <Button
+              key={state}
+              onClick={() => setFilterState(state)}
+              size="sm"
+              className={`capitalize ${filterState === state ? 'bg-primary text-white' : 'bg-transparent text-textSecondary hover:bg-gray-300 dark:hover:bg-gray-600'}`}
+            >
+              {state}
+            </Button>
+          ))}
+        </div>
+        <Input
+          type="text"
+          placeholder="Search by title or year..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          containerClassName="mb-0 flex-grow w-full sm:w-auto"
+        />
+      </div>
+
 
       {filteredClassics.length > 0 ? (
         <ul className="space-y-3">
@@ -88,7 +119,7 @@ const DisneyCollectionPage: React.FC = () => {
           ))}
         </ul>
       ) : (
-        <p className="text-center text-textSecondary py-8">No classics found matching your search.</p>
+        <p className="text-center text-textSecondary py-8">No classics found matching your criteria.</p>
       )}
     </div>
   );

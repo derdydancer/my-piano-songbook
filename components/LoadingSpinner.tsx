@@ -6,6 +6,14 @@ interface LoadingSpinnerProps {
   message?: string;
 }
 
+/**
+ * A simple loading spinner component.
+ *
+ * @remarks
+ * Used by:
+ * - Gift Assistant: AI suggestion loading state.
+ * - Workout Tracker: Potentially during initial workout definition loading. (Currently shows text, could be enhanced)
+ */
 const LoadingSpinner: React.FC<LoadingSpinnerProps> = ({ size = 'md', message }) => {
   const sizeClasses = {
     sm: 'w-6 h-6 border-2',

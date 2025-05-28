@@ -177,3 +177,22 @@ export const ArrowLeftIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) =>
     <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
   </svg>
 );
+
+export const DatabaseIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+  </svg>
+);
+
+export const ForwardIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12.75 4.5l7.5 7.5-7.5 7.5" />
+ </svg>
+);
+
+export const BeakerIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M14.25 6.083c-.528-.252-1.127-.417-1.75-.417H7.5a2.25 2.25 0 000 4.5h2.178M14.25 6.083c.452.215.883.48 1.275.788M14.25 6.083V4.5A2.25 2.25 0 0116.5 2.25h.075V.75A.75.75 0 0015.825 0h-1.65A.75.75 0 0013.5.75v1.5H4.125A.75.75 0 003.375 3v1.5h9.375m0 1.583V8.25m0 0H5.625m5.625 0v1.5A2.25 2.25 0 0013.5 12H15v1.5m0 0V15A2.25 2.25 0 0012.75 17.25h-3.075A.75.75 0 018.25 18v2.25A.75.75 0 009 21h6a.75.75 0 00.75-.75v-2.25a.75.75 0 011.425-.398l.825-2.477A.75.75 0 0017.25 15m-1.5-1.5v-.357c0-.255.053-.5.148-.735l.401-1.003a.75.75 0 011.298.734l-.16.4c-.09.225-.138.463-.138.706v.357m0 0c.245.018.488.047.726.09.67.121 1.148.368 1.479.748.104.121.19.252.258.392M15 13.5V9.75M15.75 15c.06.14.156.27.258.392m-.258-.392v-1.5m0 1.5c.33.38.81.627 1.479.748.238.043.48.072.726.09m-.984-.838A2.251 2.251 0 0115 13.5V12H7.5A2.25 2.25 0 005.25 14.25v1.5A2.25 2.25 0 007.5 18h1.5" />
+  </svg>
+);

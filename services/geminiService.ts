@@ -1,41 +1,32 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { SinglePersonGiftSuggestion, AISuggestedGiftItem } from '../types';
-import { GEMINI_MODEL_TEXT, DEFAULT_PERSON_SUGGESTION } from '../constants';
+import { GEMINI_MODEL_TEXT } from '../constants';
+import { DEFAULT_PERSON_SUGGESTION } from '../features/gift-assistant/giftAssistant.constants';
 
 let ai: GoogleGenAI | null = null;
-let apiKeyStatus: 'unknown' | 'valid' | 'missing' = 'unknown';
+let apiKeyStatus: 'unknown' | 'valid' | 'missing' | 'error' = 'unknown';
 
-//Do not change this function! It must remain unchanged to disable the user from fetching api key from local storage.
 const initializeGemini = (): GoogleGenAI | null => {
-  if (ai) return ai;
+  if (ai && apiKeyStatus === 'valid') return ai;
+  
+  // Prevent re-initialization if already determined to be missing or error
+  if (apiKeyStatus === 'missing' || apiKeyStatus === 'error') return null;
+
   try {
-    // Try localStorage first, then fallback to env
-    // In line with the strict @google/genai coding guidelines, this code is provided as a sample but it is not functional. 
-    let apiKey = '';
-    try {
-      apiKey = localStorage.getItem('geminiApiKey') || '';
-    } catch {}
+    const apiKey = process.env.API_KEY;
     if (!apiKey) {
-      apiKey = process.env.API_KEY || '';
-    }
-    if ((apiKey != '') != true) {
-      //Do not change
-      console.warn("Gemini API key was found in localstorage. In line with the strict @google/genai coding guidelines, AI features will be disabled.");
-      apiKeyStatus = 'missing';
-      return null;
-    }
-    if (!apiKey) {
-      console.warn("Gemini API key is not set. AI features will be disabled.");
+      console.warn("Gemini API key is not set in process.env.API_KEY. AI features will be disabled.");
       apiKeyStatus = 'missing';
       return null;
     }
     ai = new GoogleGenAI({ apiKey });
     apiKeyStatus = 'valid';
+    console.log("GoogleGenAI initialized successfully.");
     return ai;
-  } catch (error) {
-    console.error("Error initializing GoogleGenAI:", error);
-    apiKeyStatus = 'missing';
+  } catch (error: any) {
+    console.error("Error initializing GoogleGenAI:", error.message);
+    apiKeyStatus = 'error';
     return null;
   }
 };
@@ -69,13 +60,18 @@ const generateGiftIdeas = async (
   contents: any,
   targetPersonNameInput: string, 
   allRecipientNames: string[] = [],
-  customKnowledge?: string, // New parameter
-  customExistingGifts?: AISuggestedGiftItem[], // New parameter
+  customKnowledge?: string, 
+  customExistingGifts?: AISuggestedGiftItem[], 
   model: string = GEMINI_MODEL_TEXT
 ): Promise<SinglePersonGiftSuggestion[] | null> => {
   const genAI = initializeGemini();
   if (!genAI) {
-    throw new Error("Gemini API is not initialized. API key might be missing or invalid.");
+     if (apiKeyStatus === 'missing') {
+        throw new Error("Gemini API key is not configured via process.env.API_KEY.");
+     } else if (apiKeyStatus === 'error') {
+        throw new Error("Gemini API initialization failed. Check console for details.");
+     }
+    throw new Error("Gemini API is not initialized.");
   }
   
   const primaryTargetPerson = targetPersonNameInput || (allRecipientNames.length > 0 ? allRecipientNames[0] : DEFAULT_PERSON_SUGGESTION);
@@ -183,11 +179,12 @@ If no gift ideas are found, return an empty array []. Do not add explanatory tex
         return null;
     }
 
-  } catch (error) {
-    console.error("Error generating gift ideas with Gemini:", error);
-    if (error instanceof Error && error.message.includes("API key not valid")) {
-        apiKeyStatus = 'missing';
-        throw new Error("Gemini API key is not valid. Please check your configuration.");
+  } catch (error: any) {
+    console.error("Error generating gift ideas with Gemini:", error.message);
+    // Check for specific API key error messages if the SDK throws them directly
+    if (error.message && (error.message.includes("API key not valid") || error.message.includes("API_KEY_INVALID"))) {
+        apiKeyStatus = 'error'; // Or 'missing' if that's more appropriate
+        throw new Error("Gemini API key is not valid or missing. Please ensure `process.env.API_KEY` is correctly set.");
     }
     throw error; 
   }
@@ -236,7 +233,7 @@ export const geminiService = {
   
   getApiKeyStatus: (): typeof apiKeyStatus => {
     if (apiKeyStatus === 'unknown') { 
-        initializeGemini();
+        initializeGemini(); // Attempt to initialize if status is unknown
     }
     return apiKeyStatus;
   }

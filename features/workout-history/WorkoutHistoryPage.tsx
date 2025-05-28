@@ -73,7 +73,8 @@ const WorkoutSessionCard: React.FC<{ session: WorkoutSession }> = ({ session }) 
 };
 
 const WorkoutHistoryPage: React.FC = () => {
-  const { workoutSessions } = useAppData();
+  const { getAllWorkoutSessions } = useAppData();
+  const workoutSessions = getAllWorkoutSessions();
 
   return (
     <div className="p-4 space-y-6">

@@ -9,6 +9,19 @@ interface ModalProps {
   footer?: ReactNode;
 }
 
+/**
+ * A generic modal dialog component.
+ * Provides a base structure for overlay dialogs with a title, content area, and optional footer.
+ *
+ * @remarks
+ * Used by (often as a base for more specific modals):
+ * - `AlertModal.tsx` (Common)
+ * - `ConfirmationModal.tsx` (Common)
+ * - Weight Tracker: `WeightFormModal.tsx`
+ * - Gift Assistant: `GiftItemFormModal.tsx`, ListFormModal (inline in GiftAssistantPage)
+ * - Settings: Plate inventory editing modal.
+ * - Workout Tracker: Failed set reps input modal.
+ */
 const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer }) => {
   if (!isOpen) return null;
 

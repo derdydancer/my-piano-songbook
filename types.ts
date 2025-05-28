@@ -32,6 +32,7 @@ export interface GiftItem {
   status: GiftItemStatus;
   imageUrl?: string; // Optional: if an image was associated
   isNew?: boolean; // To indicate recently AI-added items
+  dateNewClearTimestamp?: number; // Timestamp when the "New!" status should be cleared
   tags?: string[]; // For categorizing/filtering gifts
   dateAdded?: string; // ISO string, could be useful for robust sorting
 }
@@ -41,6 +42,7 @@ export interface GiftRecipientList {
   personName: string; // Can be verbose, e.g., "Triona (Wife)"
   gifts: GiftItem[];
   knowledge?: string; // New field for storing knowledge about the person
+  orderIndex: number; // For persistent ordering of lists
 }
 
 // For Gemini interaction with structured JSON
@@ -56,10 +58,10 @@ export interface SinglePersonGiftSuggestion {
 }
 // The Gemini service will return an array: SinglePersonGiftSuggestion[]
 
-export type ActivePage = 'weight' | 'disney' | 'gifts' | 'settings' | 'train' | 'workouts' | 'more';
+export type ActivePage = 'weight' | 'disney' | 'gifts' | 'settings' | 'train' | 'workouts' | 'more' | 'bar-loader-tester';
 
 // --- App Utilities Settings ---
-export type UtilityId = 'weight' | 'disney' | 'gifts' | 'train'; // 'train' covers 'workouts'
+export type UtilityId = 'weight' | 'disney' | 'gifts' | 'train' | 'settings' | 'barLoaderTester';
 
 export interface UtilitySetting {
   id: UtilityId;
@@ -148,6 +150,8 @@ export interface AppData {
   plateInventory: Plate[];
   exerciseSettings: ExerciseSettings;
   workoutSessions: WorkoutSession[];
+  // Bar Loader Tester specific data (if any becomes persistent)
+  // barLoaderTesterData?: any; 
 }
 
 export type MoreMenuPosition = 'bottom' | 'top'; // Example, might not be needed if popover fixed
@@ -170,4 +174,30 @@ export interface CustomAIContext {
   personName: string;
   knowledge?: string;
   existingGifts: AISuggestedGiftItem[];
+}
+
+export interface PlateVisualStyle {
+  color: string;
+  height: number;
+  thickness: number;
+}
+
+// --- Bar Loading Optimizer Types ---
+export interface LoadableConfiguration {
+  plateConfig: PlateCombination;
+  actualWeight: number; // Total weight on bar
+}
+
+export interface SetLoadingDetail {
+  targetWeight: number;
+  actualWeight: number;
+  plateConfig: PlateCombination;
+  transitionEffortFromPrevious: number;
+  // Optional: Store the set type (warmup/workset) and reps for display
+  setType?: 'warmup' | 'workset';
+  reps?: number;
+}
+export interface OptimalLoadingResult {
+  totalEffort: number;
+  setLoadings: SetLoadingDetail[];
 }

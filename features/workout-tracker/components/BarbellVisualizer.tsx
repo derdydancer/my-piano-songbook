@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { PlateCombination, PlateCombinationItem } from '../../../types';
-import { getPlateVisualStyle, BAR_VISUAL_COLOR, BAR_SLEEVE_COLOR, BAR_TEXT_COLOR, BAR_TEXT_COLOR_DARK_BG } from '../../../constants';
+import { getPlateVisualStyle, BAR_VISUAL_COLOR, BAR_SLEEVE_COLOR, BAR_TEXT_COLOR, BAR_TEXT_COLOR_DARK_BG } from '../workoutTracker.constants';
 
 interface BarbellVisualizerProps {
   plateCombination: PlateCombination | null | undefined;
@@ -9,17 +9,17 @@ interface BarbellVisualizerProps {
 }
 
 const BarbellVisualizer: React.FC<BarbellVisualizerProps> = ({ plateCombination, barWeight }) => {
-  const SVG_WIDTH = 300; 
+  const SVG_VIEWBOX_WIDTH = 300; // Keep internal logic based on fixed viewBox
   const SVG_HEIGHT = 120; 
   const BAR_Y_CENTER = SVG_HEIGHT / 2;
   const BAR_THICKNESS = 10; 
   const SLEEVE_THICKNESS = 16; 
-  const BAR_SHAFT_LENGTH_RATIO = 0.3; // Changed from 0.6 to give more space to sleeves
+  const BAR_SHAFT_LENGTH_RATIO = 0.3; 
   const COLLAR_THICKNESS = 4;
   const COLLAR_HEIGHT_EXTENSION = 4; 
 
-  const barShaftLength = SVG_WIDTH * BAR_SHAFT_LENGTH_RATIO;
-  const sleeveLength = (SVG_WIDTH - barShaftLength - 2 * COLLAR_THICKNESS) / 2; // Adjusted for two collars
+  const barShaftLength = SVG_VIEWBOX_WIDTH * BAR_SHAFT_LENGTH_RATIO;
+  const sleeveLength = (SVG_VIEWBOX_WIDTH - barShaftLength - 2 * COLLAR_THICKNESS) / 2; 
 
   const barShaftStart = sleeveLength + COLLAR_THICKNESS;
   const barShaftEnd = barShaftStart + barShaftLength;
@@ -29,7 +29,7 @@ const BarbellVisualizer: React.FC<BarbellVisualizerProps> = ({ plateCombination,
 
   const renderPlates = (side: 'left' | 'right', combination: PlateCombination) => {
     const platesElements: JSX.Element[] = [];
-    let currentOffsetOnSleeve = 0; // Start from the collar outwards
+    let currentOffsetOnSleeve = 0; 
 
     const sortedCombination = [...combination].sort((a,b) => {
       return (getPlateVisualStyle(b.denomination)?.height || 0) - (getPlateVisualStyle(a.denomination)?.height || 0);
@@ -39,8 +39,8 @@ const BarbellVisualizer: React.FC<BarbellVisualizerProps> = ({ plateCombination,
       const plateStyle = getPlateVisualStyle(item.denomination);
       for (let i = 0; i < item.countPerSide; i++) {
         const plateX = side === 'left'
-          ? barShaftStart - COLLAR_THICKNESS - currentOffsetOnSleeve - plateStyle.thickness // Load from collar outwards
-          : rightSleeveStart + currentOffsetOnSleeve; // Load from collar outwards
+          ? barShaftStart - COLLAR_THICKNESS - currentOffsetOnSleeve - plateStyle.thickness 
+          : rightSleeveStart + currentOffsetOnSleeve; 
         
         platesElements.push(
           <g key={`${side}-plate-${item.denomination}-${i}`}>
@@ -71,42 +71,37 @@ const BarbellVisualizer: React.FC<BarbellVisualizerProps> = ({ plateCombination,
     return platesElements;
   };
 
+  const commonBarElements = (
+    <>
+      {/* Left Sleeve */}
+      <rect x={leftSleeveStart} y={BAR_Y_CENTER - SLEEVE_THICKNESS / 2} width={sleeveLength} height={SLEEVE_THICKNESS} fill={BAR_SLEEVE_COLOR} />
+      {/* Left Collar */}
+       <rect x={leftSleeveStart + sleeveLength} y={BAR_Y_CENTER - (SLEEVE_THICKNESS + COLLAR_HEIGHT_EXTENSION) / 2} width={COLLAR_THICKNESS} height={SLEEVE_THICKNESS + COLLAR_HEIGHT_EXTENSION} fill={BAR_VISUAL_COLOR} />
+      {/* Bar Shaft */}
+      <rect x={barShaftStart} y={BAR_Y_CENTER - BAR_THICKNESS / 2} width={barShaftLength} height={BAR_THICKNESS} fill={BAR_VISUAL_COLOR} />
+       {/* Right Collar */}
+      <rect x={barShaftEnd} y={BAR_Y_CENTER - (SLEEVE_THICKNESS + COLLAR_HEIGHT_EXTENSION) / 2} width={COLLAR_THICKNESS} height={SLEEVE_THICKNESS + COLLAR_HEIGHT_EXTENSION} fill={BAR_VISUAL_COLOR} />
+      {/* Right Sleeve */}
+      <rect x={rightSleeveStart} y={BAR_Y_CENTER - SLEEVE_THICKNESS / 2} width={sleeveLength} height={SLEEVE_THICKNESS} fill={BAR_SLEEVE_COLOR} />
+    </>
+  );
+
+
   if (!plateCombination || plateCombination.length === 0) {
     return (
-      <div className="text-center py-2">
-        <svg width={SVG_WIDTH} height={SVG_HEIGHT} viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} aria-label={`Empty ${barWeight}kg bar`}>
-          {/* Left Sleeve */}
-          <rect x={leftSleeveStart} y={BAR_Y_CENTER - SLEEVE_THICKNESS / 2} width={sleeveLength} height={SLEEVE_THICKNESS} fill={BAR_SLEEVE_COLOR} />
-          {/* Left Collar */}
-           <rect x={leftSleeveStart + sleeveLength} y={BAR_Y_CENTER - (SLEEVE_THICKNESS + COLLAR_HEIGHT_EXTENSION) / 2} width={COLLAR_THICKNESS} height={SLEEVE_THICKNESS + COLLAR_HEIGHT_EXTENSION} fill={BAR_VISUAL_COLOR} />
-          {/* Bar Shaft */}
-          <rect x={barShaftStart} y={BAR_Y_CENTER - BAR_THICKNESS / 2} width={barShaftLength} height={BAR_THICKNESS} fill={BAR_VISUAL_COLOR} />
-           {/* Right Collar */}
-          <rect x={barShaftEnd} y={BAR_Y_CENTER - (SLEEVE_THICKNESS + COLLAR_HEIGHT_EXTENSION) / 2} width={COLLAR_THICKNESS} height={SLEEVE_THICKNESS + COLLAR_HEIGHT_EXTENSION} fill={BAR_VISUAL_COLOR} />
-          {/* Right Sleeve */}
-          <rect x={rightSleeveStart} y={BAR_Y_CENTER - SLEEVE_THICKNESS / 2} width={sleeveLength} height={SLEEVE_THICKNESS} fill={BAR_SLEEVE_COLOR} />
+      <div className="text-center py-2 w-full flex flex-col items-center">
+        <svg width="90%" height={SVG_HEIGHT} viewBox={`0 0 ${SVG_VIEWBOX_WIDTH} ${SVG_HEIGHT}`} aria-label={`Empty ${barWeight}kg bar`}>
+          {commonBarElements}
         </svg>
-        <p className="text-sm text-textPrimary font-semibold">Empty Bar ({barWeight}kg)</p>
+        <p className="text-sm text-textPrimary font-semibold mt-1">Empty Bar ({barWeight}kg)</p>
       </div>
     );
   }
 
   return (
-    <div className="text-center py-2">
-      <svg width={SVG_WIDTH} height={SVG_HEIGHT} viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`} aria-label={`Barbell loaded with plates.`}>
-        {/* Left Sleeve */}
-        <rect x={leftSleeveStart} y={BAR_Y_CENTER - SLEEVE_THICKNESS / 2} width={sleeveLength} height={SLEEVE_THICKNESS} fill={BAR_SLEEVE_COLOR} />
-        {/* Left Collar */}
-        <rect x={leftSleeveStart + sleeveLength} y={BAR_Y_CENTER - (SLEEVE_THICKNESS + COLLAR_HEIGHT_EXTENSION) / 2} width={COLLAR_THICKNESS} height={SLEEVE_THICKNESS + COLLAR_HEIGHT_EXTENSION} fill={BAR_VISUAL_COLOR} />
-        
-        {/* Bar Shaft */}
-        <rect x={barShaftStart} y={BAR_Y_CENTER - BAR_THICKNESS / 2} width={barShaftLength} height={BAR_THICKNESS} fill={BAR_VISUAL_COLOR} />
-        
-        {/* Right Collar */}
-        <rect x={barShaftEnd} y={BAR_Y_CENTER - (SLEEVE_THICKNESS + COLLAR_HEIGHT_EXTENSION) / 2} width={COLLAR_THICKNESS} height={SLEEVE_THICKNESS + COLLAR_HEIGHT_EXTENSION} fill={BAR_VISUAL_COLOR} />
-        {/* Right Sleeve */}
-        <rect x={rightSleeveStart} y={BAR_Y_CENTER - SLEEVE_THICKNESS / 2} width={sleeveLength} height={SLEEVE_THICKNESS} fill={BAR_SLEEVE_COLOR} />
-
+    <div className="text-center py-2 w-full flex flex-col items-center">
+      <svg width="90%" height={SVG_HEIGHT} viewBox={`0 0 ${SVG_VIEWBOX_WIDTH} ${SVG_HEIGHT}`} aria-label={`Barbell loaded with plates.`}>
+        {commonBarElements}
         {/* Plates */}
         {renderPlates('left', plateCombination)}
         {renderPlates('right', plateCombination)}

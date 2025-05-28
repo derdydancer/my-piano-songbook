@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface SwitchToggleProps {
@@ -8,6 +9,13 @@ interface SwitchToggleProps {
   disabled?: boolean;
 }
 
+/**
+ * A simple switch toggle component for boolean settings.
+ *
+ * @remarks
+ * Used by:
+ * - Settings: To toggle utility 'enabled' status and 'showInMoreMenu' preference.
+ */
 const SwitchToggle: React.FC<SwitchToggleProps> = ({ id, checked, onChange, label, disabled = false }) => {
   const uniqueId = id || `switch-${Math.random().toString(36).substring(2, 9)}`;
 

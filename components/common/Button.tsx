@@ -8,6 +8,21 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   rightIcon?: React.ReactNode;
 }
 
+/**
+ * A generic button component for user interactions, supporting different
+ * visual styles (variants) and sizes. Can include icons.
+ *
+ * @remarks
+ * Used by:
+ * - Weight Tracker: Add Weight, Edit, Delete entry buttons; form actions.
+ * - Disney Collection: Mark as owned/unowned buttons; filter toggles.
+ * - Gift Assistant: New List, Add Gift, AI action buttons; modal actions; list item actions; copy list.
+ * - Settings: Export/Import data, Load Sample Data, Theme toggle, Save Plate inventory, Utility toggles.
+ * - Workout Tracker: Start workout, set completion (Pass/Fail/Skip), weight adjustment buttons, timer controls, modal actions.
+ * - Various Modals: Standard action buttons (OK, Cancel, Confirm).
+ * - BottomNav: More menu button (internally styled).
+ * - CollapsibleSection: Toggle button (internally styled).
+ */
 const Button: React.FC<ButtonProps> = ({
   children,
   variant = 'primary',

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { WeightEntry } from '../../types';
 import Button from '../../components/common/Button';
@@ -23,19 +22,19 @@ const WeightHistoryList: React.FC<WeightHistoryListProps> = ({ entries, onEdit, 
       <h2 className="text-xl font-semibold text-textPrimary mb-3">Weight History</h2>
       <ul className="space-y-3">
         {displayEntries.map(entry => (
-          <li key={entry.id} className="p-3 bg-background dark:bg-gray-700 rounded-md shadow-sm flex justify-between items-center">
-            <div>
+          <li key={entry.id} className="p-3 bg-background dark:bg-gray-700 rounded-md shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center">
+            <div className="flex-grow mb-2 sm:mb-0">
               <p className="font-medium text-textPrimary">
                 {new Date(entry.date).toLocaleDateString()} - <span className="text-lg text-primary">{entry.weight}</span> <span className="text-sm text-textSecondary">kg/lbs</span>
               </p>
-              {entry.notes && <p className="text-sm text-textSecondary mt-1">{entry.notes}</p>}
+              {entry.notes && <p className="text-sm text-textSecondary mt-1 max-w-xs truncate" title={entry.notes}>{entry.notes}</p>}
             </div>
-            <div className="space-x-2 flex-shrink-0">
-              <Button variant="ghost" size="sm" onClick={() => onEdit(entry)} aria-label="Edit">
-                <PencilIcon className="w-4 h-4" />
+            <div className="space-x-2 flex-shrink-0 self-end sm:self-center">
+              <Button variant="ghost" size="sm" onClick={() => onEdit(entry)} leftIcon={<PencilIcon className="w-4 h-4" />}>
+                Edit
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => onDelete(entry.id)} aria-label="Delete">
-                <TrashIcon className="w-4 h-4 text-red-500" />
+              <Button variant="ghost" size="sm" onClick={() => onDelete(entry.id)} leftIcon={<TrashIcon className="w-4 h-4 text-red-500" />}>
+                Delete
               </Button>
             </div>
           </li>
