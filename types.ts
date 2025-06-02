@@ -1,4 +1,3 @@
-
 export interface WeightEntry {
   id: string;
   date: string; // ISO string
@@ -59,10 +58,10 @@ export interface SinglePersonGiftSuggestion {
 }
 // The Gemini service will return an array: SinglePersonGiftSuggestion[]
 
-export type ActivePage = 'weight' | 'disney' | 'gifts' | 'settings' | 'train' | 'workouts' | 'more' | 'bar-loader-tester' | 'docs-viewer';
+export type ActivePage = 'weight' | 'disney' | 'gifts' | 'settings' | 'train' | 'workouts' | 'more' | 'bar-loader-tester' | 'docs-viewer' | 'piano-helper' | 'songbook' | 'guitar-tuner';
 
 // --- App Utilities Settings ---
-export type UtilityId = 'weight' | 'disney' | 'gifts' | 'train' | 'settings' | 'barLoaderTester' | 'docsViewer';
+export type UtilityId = 'weight' | 'disney' | 'gifts' | 'train' | 'settings' | 'barLoaderTester' | 'docsViewer' | 'pianoHelper' | 'songbook' | 'guitarTuner';
 
 export interface UtilitySetting {
   id: UtilityId;
@@ -142,6 +141,86 @@ export interface ActiveSetInfo {
   currentSet: SetDetails;
 }
 
+// --- Piano Chord Helper & Songbook Types ---
+
+// This is what the AI returns and what PianoHelperPage initially works with
+export interface UniqueChordDefinition {
+  chordName: string;
+  // AI's initially suggested/parsed notes for this chord.
+  // This will be used to find the initial selectedVoicingIndex.
+  aiSuggestedNotes: string[];
+  // The initial selectedVoicingIndex is determined by finding aiSuggestedNotes in all programmatically generated voicings.
+  // This field might not be strictly needed on this type if PianoHelperPage manages it transiently.
+  // However, if AI could suggest an index, it might go here. For now, PianoHelperPage will calculate it.
+}
+
+// This is what gets stored in SavedPianoSong (persisted state)
+export interface SavedUniqueChordDefinition {
+  chordName: string;
+  selectedNotes: string[];     // The actual notes of the chosen voicing
+  selectedVoicingIndex: number; // Index of selectedNotes in the programmatically generated list of all voicings
+}
+
+
+export interface ChordProgressionItem {
+  chordName: string; // References a chordName in UniqueChordDefinition[] or SavedUniqueChordDefinition[]
+  originalContext?: string; // e.g., "The [Cmaj]sun shines bright..."
+}
+
+// This is the structure returned by the AI service
+export interface PianoAnalysisResult {
+  songTitle?: string;
+  lyricsBy?: string;
+  musicBy?: string;
+  uniqueChords: UniqueChordDefinition[]; // AI provides its best guess for each unique chord
+  chordProgression: ChordProgressionItem[];
+}
+
+export interface PianoKey {
+  note: string; // e.g., "C", "C#", "D"
+  octave: number;
+  type: 'white' | 'black';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isPressed?: boolean;
+  fullName: string; // e.g., "C4"
+}
+
+export interface SavedPianoSong {
+  id: string;
+  songTitle: string;
+  lyricsBy?: string;
+  musicBy?: string;
+  sourceText?: string;
+  sourceImageBase64?: string;
+  sourceImageMimeType?: string;
+  analysisResult: { // Nested structure for analysis specific to this saved song
+    songTitle?: string; // Can be redundant with SavedPianoSong.songTitle but keeps structure from AI
+    lyricsBy?: string;
+    musicBy?: string;
+    uniqueChords: SavedUniqueChordDefinition[]; // Uses the "saved" version of chord definition
+    chordProgression: ChordProgressionItem[];
+  };
+  dateAdded: string; // ISO string
+}
+
+// --- Guitar Tuner Types ---
+export interface StandardNote {
+  name: string; // e.g., "E2", "A4"
+  frequency: number;
+}
+
+export interface TuningInfo {
+  detectedFrequency: number | null;
+  targetNote: string | null; // e.g. "E", "A#"
+  targetFrequency: number | null;
+  deviationInCents: number | null; // e.g. -10 (flat), +5 (sharp)
+  clarity?: number; // Optional: A measure of how clear the note is (0-1)
+}
+
+
 export interface AppData {
   weightEntries: WeightEntry[];
   disneyCollection: DisneyOwnedStatus[];
@@ -151,10 +230,14 @@ export interface AppData {
   plateInventory: Plate[];
   exerciseSettings: ExerciseSettings;
   workoutSessions: WorkoutSession[];
+  // Piano Helper & Songbook Data
+  savedPianoSongs: SavedPianoSong[];
   // Bar Loader Tester specific data (if any becomes persistent)
   // barLoaderTesterData?: any; 
   // Docs Viewer specific data (if any becomes persistent)
   // docsViewerData?: any;
+  // Guitar Tuner specific data (if any becomes persistent)
+  // guitarTunerData?: any;
 }
 
 export type MoreMenuPosition = 'bottom' | 'top'; // Example, might not be needed if popover fixed

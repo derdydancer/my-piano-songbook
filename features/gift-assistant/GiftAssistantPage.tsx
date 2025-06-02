@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useAppData } from '../../contexts/AppDataContext';
 import { GiftRecipientList, GiftItem, ManualGiftItemData, GiftItemStatus, SinglePersonGiftSuggestion, ProcessedAIResults, CustomAIContext, AISuggestedGiftItem } from '../../types';
@@ -210,7 +211,7 @@ const GiftAssistantPage: React.FC = () => {
   
   useEffect(() => {
     const now = Date.now();
-    let timeoutIds: NodeJS.Timeout[] = [];
+    let timeoutIds: number[] = []; // Changed NodeJS.Timeout[] to number[]
 
     giftRecipientLists.forEach(list => {
       list.gifts.forEach(gift => {

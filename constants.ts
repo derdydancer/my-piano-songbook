@@ -1,4 +1,3 @@
-
 import { UtilityId, UtilitySetting } from './types'; // LiftType might not be needed here anymore
 
 export const GEMINI_MODEL_TEXT = "gemini-2.5-flash-preview-04-17";
@@ -12,6 +11,9 @@ export const UTILITY_IDS: Record<string, UtilityId> = {
   SETTINGS: 'settings',
   BAR_LOADER_TESTER: 'barLoaderTester',
   DOCS_VIEWER: 'docsViewer',
+  PIANO_HELPER: 'pianoHelper',
+  SONGBOOK: 'songbook',
+  GUITAR_TUNER: 'guitarTuner',
 };
 
 export const DEFAULT_UTILITY_SETTINGS: UtilitySetting[] = [
@@ -19,6 +21,9 @@ export const DEFAULT_UTILITY_SETTINGS: UtilitySetting[] = [
   { id: UTILITY_IDS.DISNEY as UtilityId, name: "Disney Collection", enabled: true, showInMoreMenu: false },
   { id: UTILITY_IDS.GIFTS as UtilityId, name: "Gift Assistant", enabled: true, showInMoreMenu: false },
   { id: UTILITY_IDS.TRAIN as UtilityId, name: "Workout Tracker", enabled: true, showInMoreMenu: false },
+  { id: UTILITY_IDS.PIANO_HELPER as UtilityId, name: "Piano Chord Helper", enabled: true, showInMoreMenu: false },
+  { id: UTILITY_IDS.SONGBOOK as UtilityId, name: "Songbook", enabled: true, showInMoreMenu: false },
+  { id: UTILITY_IDS.GUITAR_TUNER as UtilityId, name: "Guitar Tuner", enabled: true, showInMoreMenu: false },
   { id: UTILITY_IDS.SETTINGS as UtilityId, name: "Settings", enabled: true, showInMoreMenu: false }, // Settings should always be enabled
   { id: UTILITY_IDS.BAR_LOADER_TESTER as UtilityId, name: "Bar Loading Tester", enabled: true, showInMoreMenu: true }, 
   { id: UTILITY_IDS.DOCS_VIEWER as UtilityId, name: "Docs Viewer", enabled: true, showInMoreMenu: true },

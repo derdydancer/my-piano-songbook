@@ -7,6 +7,7 @@ interface CollapsibleSectionProps {
   children: ReactNode;
   initialOpen?: boolean;
   headerContent?: ReactNode; // Optional additional content for the header
+  onToggle?: (isOpen: boolean) => void; // Optional callback when toggled
 }
 
 /**
@@ -17,18 +18,27 @@ interface CollapsibleSectionProps {
  * Used by:
  * - Gift Assistant: To collapse/expand individual gift recipient lists and AI suggestion sections.
  * - Settings: To group different settings categories (General, Utility-specific).
+ * - Songbook: To expand/collapse individual songs.
  */
-const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children, initialOpen = false, headerContent }) => {
+const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children, initialOpen = false, headerContent, onToggle }) => {
   const [isOpen, setIsOpen] = useState(initialOpen);
+
+  const handleToggle = () => {
+    const newIsOpen = !isOpen;
+    setIsOpen(newIsOpen);
+    if (onToggle) {
+      onToggle(newIsOpen);
+    }
+  };
 
   return (
     <div className="bg-card rounded-lg shadow">
       <div         
         className="w-full flex justify-between items-center p-4 text-left focus:outline-none"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleToggle}
         role="button" // Make it clear it's clickable
         tabIndex={0} // Make it focusable
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setIsOpen(!isOpen); }}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleToggle(); }}
         aria-expanded={isOpen}
         aria-controls={`section-${title.replace(/\s+/g, '-').toLowerCase()}`}
       >
@@ -37,7 +47,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children
         <button 
             className="ml-2 p-1 focus:outline-none focus:ring-2 focus:ring-primary rounded" 
             aria-label={isOpen ? "Collapse section" : "Expand section"}
-            onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen);}} // Allow icon click as well
+            onClick={(e) => { e.stopPropagation(); handleToggle();}} // Allow icon click as well
         >
             {isOpen ? <ChevronUpIcon className="w-5 h-5 text-textSecondary" /> : <ChevronDownIcon className="w-5 h-5 text-textSecondary" />}
         </button>

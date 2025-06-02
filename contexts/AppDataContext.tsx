@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, ReactNode, useCallback, useEffect, useState } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
-import { AppData, WeightEntry, DisneyOwnedStatus, GiftRecipientList, GiftItem, Plate, ExerciseSettings, WorkoutSession, LiftType, UtilitySetting, UtilityId, SinglePersonGiftSuggestion, ProcessedAIResults, ManualGiftItemData, AISuggestedGiftItem } from '../types';
+import { AppData, WeightEntry, DisneyOwnedStatus, GiftRecipientList, GiftItem, Plate, ExerciseSettings, WorkoutSession, LiftType, UtilitySetting, UtilityId, SinglePersonGiftSuggestion, ProcessedAIResults, ManualGiftItemData, AISuggestedGiftItem, SavedPianoSong, SavedUniqueChordDefinition } from '../types';
 import { DEFAULT_UTILITY_SETTINGS, UTILITY_IDS } from '../constants'; // Global constants
 import { AI_STUDIO_SAMPLE_DATA } from '../sampleData'; // Aggregated sample data
 
@@ -11,7 +11,10 @@ import { initialDisneyCollectionData, createDisneyCollectionActions, DisneyColle
 import { initialGiftAssistantData, createGiftAssistantActions, GiftAssistantActions, NEW_TAG_DURATION_MS } from '../features/gift-assistant/giftAssistant.data';
 import { initialWorkoutTrackerData, createWorkoutTrackerActions, WorkoutTrackerActions } from '../features/workout-tracker/workoutTracker.data';
 import { initialBarLoaderTesterData, createBarLoaderTesterActions, BarLoaderTesterActions } from '../features/bar-loader-tester/barLoaderTester.data';
-import { initialDocsViewerData, createDocsViewerActions, DocsViewerActions } from '../features/docs-viewer/docsViewer.data'; // New Utility
+import { initialDocsViewerData, createDocsViewerActions, DocsViewerActions } from '../features/docs-viewer/docsViewer.data';
+import { initialPianoHelperData, createPianoHelperActions, PianoHelperActions } from '../features/piano-helper/pianoHelper.data';
+import { initialSongbookData, createSongbookActions, SongbookActions } from '../features/songbook/songbook.data';
+import { initialGuitarTunerData, createGuitarTunerActions, GuitarTunerActions } from '../features/guitar-tuner/guitarTuner.data'; // New Utility
 
 import { ALL_LIFTS as WORKOUT_ALL_LIFTS } from '../features/workout-tracker/workoutTracker.constants'; // For migration
 import { getDefaultPlateInventory as getWorkoutDefaultPlateInventory, getDefaultExerciseSettings as getWorkoutDefaultExerciseSettings } from '../features/workout-tracker/workoutTracker.data'; // For migration
@@ -28,6 +31,7 @@ interface AppDataCoreContextType {
   getUtilitySetting: (utilityId: UtilityId) => UtilitySetting | undefined;
   weightEntries: WeightEntry[];
   disneyCollection: DisneyOwnedStatus[];
+  savedPianoSongs: SavedPianoSong[]; // Exposed for Songbook to read
   // Note: workoutTracker specific actions like generateSetsForExercise are part of WorkoutTrackerActions
 }
 
@@ -38,7 +42,10 @@ export type AppDataContextType = AppDataCoreContextType &
   GiftAssistantActions &
   WorkoutTrackerActions &
   BarLoaderTesterActions &
-  DocsViewerActions; // New Utility Actions
+  DocsViewerActions &
+  PianoHelperActions &
+  SongbookActions &
+  GuitarTunerActions; // New Utility Actions
 
 const AppDataContext = createContext<AppDataContextType | undefined>(undefined);
 
@@ -49,7 +56,10 @@ const initialAppData: AppData = {
   ...initialGiftAssistantData,
   ...initialWorkoutTrackerData,
   ...initialBarLoaderTesterData, 
-  ...initialDocsViewerData, // New Utility
+  ...initialDocsViewerData,
+  ...initialPianoHelperData, // Contains initial savedPianoSongs: []
+  ...initialSongbookData, 
+  ...initialGuitarTunerData, // New Utility
   utilitySettings: DEFAULT_UTILITY_SETTINGS,
 };
 
@@ -221,6 +231,35 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
           dataChanged = true;
       }
     }
+    
+    // Migration for savedPianoSongs structure
+    if (tempAppData.savedPianoSongs === undefined) {
+      tempAppData.savedPianoSongs = initialPianoHelperData.savedPianoSongs;
+      dataChanged = true;
+    } else {
+      // Check if migration for SavedUniqueChordDefinition is needed
+      let pianoSongsMigrationNeeded = false;
+      tempAppData.savedPianoSongs.forEach(song => {
+        if (song.analysisResult && song.analysisResult.uniqueChords) {
+          song.analysisResult.uniqueChords.forEach((chord: any) => { // Use 'any' for old structure check
+            if (chord.notes && !chord.selectedNotes) { // Old structure had 'notes'
+              pianoSongsMigrationNeeded = true;
+              // Simple migration: assume AI's notes are the selected ones, index 0
+              chord.selectedNotes = chord.notes;
+              chord.selectedVoicingIndex = 0; 
+              delete chord.notes; // Remove old field
+              delete chord.aiSuggestedNotes; // Remove if it was transiently added
+            }
+             if (chord.selectedVoicingIndex === undefined) {
+                chord.selectedVoicingIndex = 0; // Default if missing
+                pianoSongsMigrationNeeded = true;
+             }
+          });
+        }
+      });
+      if (pianoSongsMigrationNeeded) dataChanged = true;
+    }
+
 
     if (dataChanged) {
       console.log("App data migrated/updated:", tempAppData);
@@ -232,7 +271,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
   const exportData = useCallback((): AppData => appData, [appData]);
 
   const importData = useCallback((data: AppData): boolean => {
-    if (data && data.weightEntries !== undefined && data.disneyCollection !== undefined && data.giftRecipientLists !== undefined && data.plateInventory !== undefined && data.exerciseSettings !== undefined && data.workoutSessions !== undefined && data.utilitySettings !== undefined) {
+    if (data && data.weightEntries !== undefined && data.disneyCollection !== undefined && data.giftRecipientLists !== undefined && data.plateInventory !== undefined && data.exerciseSettings !== undefined && data.workoutSessions !== undefined && data.utilitySettings !== undefined && data.savedPianoSongs !== undefined) {
       if (data.giftRecipientLists && data.giftRecipientLists.some(list => list.orderIndex === undefined)) {
         data.giftRecipientLists.forEach((list, index) => {
           list.orderIndex = index; 
@@ -246,7 +285,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
       console.error("Import failed: Invalid data format.", data);
       return false;
     }
-  }, [setAppData, initialAppData]); // Added initialAppData dependency
+  }, [setAppData, initialAppData]);
   
   const loadSampleData = useCallback(() => {
     setAppData(AI_STUDIO_SAMPLE_DATA);
@@ -273,8 +312,6 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
   }, [appData.utilitySettings]);
 
   const getAppDataForActions = useCallback((): AppData => {
-    // Return a deep copy to prevent direct mutation if actions were to modify the returned object before setAppData
-    // For read-only purposes, this is fine. If actions might modify it, a deep copy is safer.
     return appData; 
   }, [appData]);
 
@@ -285,6 +322,9 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
   const workoutTrackerActions = createWorkoutTrackerActions(setAppData, getAppDataForActions);
   const barLoaderTesterActions = createBarLoaderTesterActions(setAppData, getAppDataForActions, workoutTrackerActions); 
   const docsViewerActions = createDocsViewerActions(setAppData, getAppDataForActions);
+  const pianoHelperActions = createPianoHelperActions(setAppData, getAppDataForActions);
+  const songbookActions = createSongbookActions(setAppData, getAppDataForActions);
+  const guitarTunerActions = createGuitarTunerActions(setAppData, getAppDataForActions); // New Utility Actions
 
 
   const contextValue: AppDataContextType = {
@@ -296,12 +336,16 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     getUtilitySetting,
     weightEntries: appData.weightEntries,
     disneyCollection: appData.disneyCollection,
+    savedPianoSongs: appData.savedPianoSongs, // Expose saved songs
     ...weightTrackerActions,
     ...disneyCollectionActions,
     ...giftAssistantActions,
     ...workoutTrackerActions,
     ...barLoaderTesterActions, 
     ...docsViewerActions,
+    ...pianoHelperActions,
+    ...songbookActions,
+    ...guitarTunerActions, // New Utility Actions
   };
   
   return (

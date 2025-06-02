@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { SinglePersonGiftSuggestion, AISuggestedGiftItem } from '../types';
+import { SinglePersonGiftSuggestion, AISuggestedGiftItem, PianoAnalysisResult, UniqueChordDefinition, ChordProgressionItem } from '../types';
 import { GEMINI_MODEL_TEXT } from '../constants';
 import { DEFAULT_PERSON_SUGGESTION } from '../features/gift-assistant/giftAssistant.constants';
 
@@ -8,18 +8,14 @@ let ai: GoogleGenAI | null = null;
 let apiKeyStatus: 'unknown' | 'valid' | 'missing' | 'error' = 'unknown';
 
 const initializeGemini = (): GoogleGenAI | null => {
-    if (ai) return ai;
-    try {
-        // Try localStorage first, then fallback to env
-        let apiKey = '';
-        try {
-            apiKey = localStorage.getItem('geminiApiKey') || '';
-        } catch {}
+  if (ai && apiKeyStatus === 'valid') return ai;
+  
+  if (apiKeyStatus === 'missing' || apiKeyStatus === 'error') return null;
+
+  try {
+    const apiKey = process.env.API_KEY;
     if (!apiKey) {
-            apiKey = process.env.API_KEY || '';
-        }
-        if (!apiKey) {
-            console.warn("Gemini API key is not set. AI features will be disabled.");
+      console.warn("Gemini API key is not set in process.env.API_KEY. AI features will be disabled.");
       apiKeyStatus = 'missing';
       return null;
     }
@@ -29,7 +25,7 @@ const initializeGemini = (): GoogleGenAI | null => {
     return ai;
   } catch (error: any) {
     console.error("Error initializing GoogleGenAI:", error.message);
-        apiKeyStatus = 'missing';
+    apiKeyStatus = 'error';
     return null;
   }
 };
@@ -43,8 +39,6 @@ const parseJsonFromText = <T,>(text: string): T | null => {
     jsonStr = match[2].trim();
   }
 
-  // Pre-process to replace invalid escape sequence \$ with just $
-  // This addresses the "Bad escaped character in JSON" error for dollar signs.
   jsonStr = jsonStr.replace(/\\\$`/g, '$');
 
   try {
@@ -70,7 +64,7 @@ const generateGiftIdeas = async (
   customKnowledge?: string, 
   customExistingGifts?: AISuggestedGiftItem[], 
   isImagePrompt: boolean = false,
-  hasCustomContext: boolean = false, // New parameter
+  hasCustomContext: boolean = false, 
   model: string = GEMINI_MODEL_TEXT
 ): Promise<SinglePersonGiftSuggestion[] | null> => {
   const genAI = initializeGemini();
@@ -84,7 +78,6 @@ const generateGiftIdeas = async (
   }
   
   const primaryTargetPerson = targetPersonNameInput || (allRecipientNames.length > 0 ? allRecipientNames[0] : DEFAULT_PERSON_SUGGESTION);
-  // isNewPersonCandidate is always false. The AI will map to existing names or the primaryTargetPerson.
   
   const jsonFormat = `
 [
@@ -94,7 +87,6 @@ const generateGiftIdeas = async (
       { "itemName": "string (Specific product name or item described)", "details": "string (Detailed description. Include approximate price like '~\\$25' or 'range \\$50-\\$70', and potential vendor/store like 'from Amazon', 'local Etsy shop', 'Target', etc. If image prompt, extract this from image if possible.)" }
     ]
   }
-  // ... more entries if gifts for multiple existing people are clearly identified.
 ]`;
   const existingNamesListString = allRecipientNames.length > 0 ? `[${allRecipientNames.map(n => `"${n}"`).join(', ')}]` : "[] (No existing people/lists)";
 
@@ -109,7 +101,7 @@ RESPONSE RULES:
 3.  **Empty Result:** If no suitable gifts, return an empty array []. Do not add explanatory text outside the JSON.
 `;
 
-  if (hasCustomContext) { // Person is selected - AI should GENERATE recommendations
+  if (hasCustomContext) { 
     systemInstruction += `
 SPECIFIC TASK: GENERATE PERSONALIZED RECOMMENDATIONS for "${primaryTargetPerson}".
 - Knowledge about this person: "${customKnowledge || 'Not specified'}"
@@ -119,14 +111,14 @@ SPECIFIC TASK: GENERATE PERSONALIZED RECOMMENDATIONS for "${primaryTargetPerson}
     if (isImagePrompt) {
       systemInstruction += `- If an image is provided, it's a product for "${primaryTargetPerson}". Identify it and provide details.`;
     }
-  } else { // No person selected - AI should PARSE information or IDENTIFY from image
+  } else { 
     if (isImagePrompt) {
       systemInstruction += `
 SPECIFIC TASK: ANALYZE IMAGE and associate with an EXISTING PERSON.
 - If image is a product photo: Identify it and its details. Associate with "${primaryTargetPerson}".
 - If image is a screenshot of text (e.g., a chat): Analyze text for gift wishes. If a recipient mentioned in the text matches a name in ${existingNamesListString}, associate the gift with them. Otherwise, associate with "${primaryTargetPerson}".
 `;
-    } else { // Text prompt, no custom context
+    } else { 
       systemInstruction += `
 SPECIFIC TASK: PARSE USER'S TEXT for gift items and assign to an EXISTING PERSON.
 - User's prompt likely contains specific gift items and potentially for whom. Extract these.
@@ -144,7 +136,7 @@ SPECIFIC TASK: PARSE USER'S TEXT for gift items and assign to an EXISTING PERSON
       config: {
         systemInstruction: systemInstruction,
         responseMimeType: "application/json",
-        temperature: hasCustomContext ? 0.4 : 0.2, // Lower temp for parsing, slightly higher for generation
+        temperature: hasCustomContext ? 0.4 : 0.2, 
       },
     });
     
@@ -153,16 +145,13 @@ SPECIFIC TASK: PARSE USER'S TEXT for gift items and assign to an EXISTING PERSON
       console.error("Gemini API returned no text response.");
       return null;
     }
-    // console.warn("System Instruction (Gemini Service):", systemInstruction); // For debugging
-    // console.warn("AI Raw Response (Gemini Service):", textResponse); // For debugging
     
-    let parsedSuggestions = parseJsonFromText<any[]>(textResponse); // Use any[] initially for flexibility
+    let parsedSuggestions = parseJsonFromText<any[]>(textResponse);
     
     if (parsedSuggestions && Array.isArray(parsedSuggestions)) {
         const validatedSuggestions: SinglePersonGiftSuggestion[] = [];
         for (const rawSuggestion of parsedSuggestions) {
-            // Ensure personName is valid and from the existing list, or defaults to primaryTargetPerson
-            let finalPersonName = primaryTargetPerson; // Default
+            let finalPersonName = primaryTargetPerson; 
             if (rawSuggestion.personName && typeof rawSuggestion.personName === 'string') {
                 const matchedName = allRecipientNames.find(name => name.toLowerCase() === rawSuggestion.personName.toLowerCase());
                 if (matchedName) {
@@ -170,7 +159,6 @@ SPECIFIC TASK: PARSE USER'S TEXT for gift items and assign to an EXISTING PERSON
                 } else if (allRecipientNames.includes(rawSuggestion.personName)) {
                     finalPersonName = rawSuggestion.personName;
                 }
-                // If no match, it defaults to primaryTargetPerson as initialized
             }
 
             if (finalPersonName && rawSuggestion.gifts && Array.isArray(rawSuggestion.gifts) && rawSuggestion.gifts.length > 0) {
@@ -179,7 +167,6 @@ SPECIFIC TASK: PARSE USER'S TEXT for gift items and assign to an EXISTING PERSON
                 if (validGifts.length > 0) {
                     validatedSuggestions.push({
                         personName: finalPersonName,
-                        // isNewPersonCandidate will be omitted or always false client-side
                         gifts: validGifts
                     });
                 }
@@ -228,11 +215,11 @@ SPECIFIC TASK: PARSE USER'S TEXT for gift items and assign to an EXISTING PERSON
 export const geminiService = {
   generateGiftIdeasFromText: async (
     text: string, 
-    targetPersonName: string, // This is primaryTargetPerson
+    targetPersonName: string, 
     allRecipientNames: string[],
     customKnowledge?: string,
     customExistingGifts?: AISuggestedGiftItem[],
-    hasCustomContext: boolean = false // Pass this down
+    hasCustomContext: boolean = false 
     ): Promise<SinglePersonGiftSuggestion[] | null> => {
     return generateGiftIdeas({ parts: [{ text: text }] }, targetPersonName, allRecipientNames, customKnowledge, customExistingGifts, false, hasCustomContext);
   },
@@ -240,11 +227,11 @@ export const geminiService = {
   generateGiftIdeasFromImage: async (
     base64ImageData: string,
     mimeType: string,
-    targetPersonName: string, // This is primaryTargetPerson
+    targetPersonName: string, 
     allRecipientNames: string[],
     customKnowledge?: string,
     customExistingGifts?: AISuggestedGiftItem[],
-    hasCustomContext: boolean = false // Pass this down
+    hasCustomContext: boolean = false 
   ): Promise<SinglePersonGiftSuggestion[] | null> => {
     const imagePart = {
       inlineData: {
@@ -264,6 +251,148 @@ export const geminiService = {
     return generateGiftIdeas({ parts: [imagePart, textPart] }, targetPersonName, allRecipientNames, customKnowledge, customExistingGifts, true, hasCustomContext);
   },
   
+  generatePianoChords: async (
+    promptContent: { text?: string; base64ImageData?: string; mimeType?: string },
+    model: string = GEMINI_MODEL_TEXT
+  ): Promise<PianoAnalysisResult | null> => {
+    const genAI = initializeGemini();
+    if (!genAI) {
+      if (apiKeyStatus === 'missing') {
+        throw new Error("Gemini API key is not configured via process.env.API_KEY.");
+      } else if (apiKeyStatus === 'error') {
+        throw new Error("Gemini API initialization failed. Check console for details.");
+      }
+      throw new Error("Gemini API is not initialized.");
+    }
+
+    // The JSON structure the AI should return. 'notes' here will be mapped to 'aiSuggestedNotes'.
+    const jsonFormat = `
+{
+  "songTitle": "string (Optional: The title of the song, if identifiable. If not, omit or use 'Unknown Title')",
+  "lyricsBy": "string (Optional: Lyricist's name, if identifiable. If not, omit.)",
+  "musicBy": "string (Optional: Composer's name, if identifiable. If not, omit.)",
+  "uniqueChords": [
+    {
+      "chordName": "string (Standard chord name, e.g., C, Gm7, F#dim, Am/G, Cmaj7. Each unique chord symbol from the input appears ONLY ONCE here)",
+      "notes": ["string (e.g., C4)", "string (e.g., E4)", "string (G4)"] 
+    }
+  ],
+  "chordProgression": [
+    {
+      "chordName": "string (The chord symbol as it appears in sequence. Must match a chordName in uniqueChords)",
+      "originalContext": "string (Optional: snippet of lyrics/text where the chord appeared, e.g., 'The [Cmaj]sun shines bright...')"
+    }
+  ]
+}`;
+
+    const systemInstruction = `You are a musical assistant specializing in piano chords.
+Given lyrics or an image of sheet music, identify musical chords, song metadata (title, lyricist, composer if available), and the chord progression.
+
+RESPONSE RULES:
+1.  **JSON Structure:** Respond STRICTLY with a SINGLE JSON object in the format: ${jsonFormat}. The 'responseMimeType' is 'application/json'.
+2.  **Song Metadata:** 'songTitle', 'lyricsBy', 'musicBy' are optional. If not found, they can be omitted or 'songTitle' can be 'Unknown Title'.
+3.  **Unique Chords Array ('uniqueChords'):**
+    a. This array MUST contain an inventory of all unique chord symbols identified in the input (e.g., C, G, Am). Each unique chord symbol should appear EXACTLY ONCE in this array.
+    b. Each object in 'uniqueChords' must have 'chordName' (string) and 'notes' (array of string pitch notations like "C4", "F#3").
+    c. **Voicing for 'notes' in 'uniqueChords.notes':** For each chord, provide ONE representative, easy-to-play voicing (e.g., root position or a common, comfortable inversion). This will be the AI's suggested voicing.
+        i. **7th Chords Voicing (for this single suggested voicing):**
+            - For DOMINANT 7TH chords (e.g., C7, G7, A7 - major triad with a minor 7th), list ONLY THREE notes by OMITTING THE 5TH DEGREE. Example: G7 (G-B-D-F) -> ["G3", "B3", "F4"].
+            - For ALL OTHER types of 7th chords (e.g., Cmaj7, Am7, F#m7b5, Cdim7), list ALL FOUR notes (root, 3rd, 5th, 7th), voiced appropriately. Example: Cmaj7 (C-E-G-B) -> ["C4", "E4", "G4", "B4"]; Am7 (A-C-E-G) -> ["A3", "C4", "E4", "G4"].
+4.  **Chord Progression Array ('chordProgression'):**
+    a. This array MUST list all identified chords in the EXACT SEQUENCE they appear in the input material.
+    b. Each object in 'chordProgression' must have 'chordName' (string), which MUST match a 'chordName' from an entry in the 'uniqueChords' array.
+    c. Include 'originalContext' (a short snippet of lyrics/text showing the chord symbol *embedded within square brackets* in its original place, e.g., 'The [Cmaj]sun shines bright...'). If no direct lyrics context, use chord symbol.
+5.  **Input Analysis:**
+    a. If input is lyrics: Look for chord symbols (like C, G, Am/G, Fmaj7) typically found above or within the text. Extract these into 'originalContext' with the chord symbol embedded.
+    b. If input is sheet music image: Analyze for explicit chord symbols, implied harmony, song title, composer, and lyricist. For 'originalContext' in 'chordProgression', if no lyrics, use just the chord symbol itself or a measure number if discernible.
+6.  **Note Format:** Notes in 'uniqueChords.notes' must be standard pitch notation (Note name C-B, optional #/b, octave number e.g., 2-5). Typical piano range is A0-C8.
+7.  **Chord Naming:** 'chordName' should be standard (e.g., "Cmaj7", "Am", "G/B", "C7").
+8.  **B/H Notation Awareness:** Be aware that in some notation systems (especially German), 'H' may represent B natural, and 'B' may represent B flat. If the input's context (e.g., language of lyrics) suggests this, interpret accordingly. For standard English input, 'B' is B natural and 'Bb' is B flat.
+9.  **Accuracy:** Prioritize accuracy in chord identification, note spelling, and progression sequence.
+10. **Empty Result:** If no chords are reliably identified, 'uniqueChords' and 'chordProgression' should be empty arrays []. 'songTitle' can be 'Unknown Title'. Do not add explanatory text outside the JSON.
+`;
+
+    let contentsRequest: any;
+    let defaultTitle = "Unknown Song";
+    if (promptContent.base64ImageData && promptContent.mimeType) {
+      contentsRequest = {
+        parts: [
+          { text: "Analyze the following sheet music image. Provide song title, authors, an inventory of unique chords (following specific 7th chord voicing rules for the suggested notes), and the chord progression as per the specified JSON structure." },
+          { inlineData: { mimeType: promptContent.mimeType, data: promptContent.base64ImageData } },
+        ],
+      };
+    } else if (promptContent.text) {
+      const firstLine = promptContent.text.split('\n')[0].trim();
+      if (firstLine.length > 0 && firstLine.length < 50 && !firstLine.includes('[')) { 
+        defaultTitle = firstLine;
+      }
+      contentsRequest = { parts: [{ text: `Analyze the following lyrics/chords. Provide song title, authors, an inventory of unique chords (following specific 7th chord voicing rules for the suggested notes), and the chord progression as per the specified JSON structure. Lyrics/Chords: ${promptContent.text}` }] };
+    } else {
+      throw new Error("No content provided for piano chord generation (text or image).");
+    }
+    
+    try {
+      const response: GenerateContentResponse = await genAI.models.generateContent({
+        model: model,
+        contents: contentsRequest,
+        config: {
+          systemInstruction: systemInstruction,
+          responseMimeType: "application/json",
+          temperature: 0.2, 
+        },
+      });
+
+      const textResponse = response.text;
+      if (!textResponse) {
+        console.error("Gemini API returned no text response for piano chords.");
+        return null;
+      }
+
+      const parsedJson = parseJsonFromText<any>(textResponse); // Parse as generic 'any' first
+      
+      if (parsedJson && Array.isArray(parsedJson.uniqueChords) && Array.isArray(parsedJson.chordProgression)) {
+        const validatedUniqueChords: UniqueChordDefinition[] = parsedJson.uniqueChords
+          .filter((chord: any) => 
+            chord.chordName && 
+            Array.isArray(chord.notes) && 
+            chord.notes.every((note: any) => typeof note === 'string' && note.match(/^[A-Ga-g][#b]?\d$/)) &&
+            chord.notes.length > 0 
+          )
+          .map((chord: any) => ({ // Map to the new UniqueChordDefinition structure
+            chordName: chord.chordName,
+            aiSuggestedNotes: chord.notes 
+          }));
+
+        const validatedChordProgression = parsedJson.chordProgression.filter((item: any) =>
+            item.chordName && validatedUniqueChords.some(uc => uc.chordName === item.chordName)
+        );
+
+        return {
+            songTitle: parsedJson.songTitle || defaultTitle,
+            lyricsBy: parsedJson.lyricsBy,
+            musicBy: parsedJson.musicBy,
+            uniqueChords: validatedUniqueChords,
+            chordProgression: validatedChordProgression
+        };
+      } else {
+        console.error("Parsed JSON for piano analysis is not in the expected format (uniqueChords/chordProgression missing or invalid):", parsedJson);
+        return { 
+            songTitle: defaultTitle,
+            uniqueChords: [],
+            chordProgression: []
+        };
+      }
+
+    } catch (error: any) {
+      console.error("Error generating piano chords with Gemini:", error.message, error.stack);
+      if (error.message && (error.message.includes("API key not valid") || error.message.includes("API_KEY_INVALID"))) {
+        apiKeyStatus = 'error'; 
+        throw new Error("Gemini API key is not valid or missing. Please ensure `process.env.API_KEY` is correctly set.");
+      }
+      throw error;
+    }
+  },
+
   getApiKeyStatus: (): typeof apiKeyStatus => {
     if (apiKeyStatus === 'unknown') { 
         initializeGemini();

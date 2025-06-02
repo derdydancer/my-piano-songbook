@@ -9,7 +9,10 @@ import SettingsPage from './features/settings/SettingsPage';
 import WorkoutTrackerPage from './features/workout-tracker/WorkoutTrackerPage';
 import WorkoutHistoryPage from './features/workout-history/WorkoutHistoryPage';
 import BarLoaderTesterPage from './features/bar-loader-tester/BarLoaderTesterPage';
-import DocsViewerPage from './features/docs-viewer/DocsViewerPage'; // New Utility
+import DocsViewerPage from './features/docs-viewer/DocsViewerPage';
+import PianoHelperPage from './features/piano-helper/PianoHelperPage';
+import SongbookPage from './features/songbook/SongbookPage';
+import GuitarTunerPage from './features/guitar-tuner/GuitarTunerPage'; // New Utility
 import { AppDataProvider, useAppData } from './contexts/AppDataContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { UTILITY_IDS } from './constants';
@@ -42,8 +45,11 @@ const AppContent: React.FC = () => {
       UTILITY_IDS.DISNEY, 
       UTILITY_IDS.GIFTS, 
       UTILITY_IDS.TRAIN,
+      UTILITY_IDS.PIANO_HELPER,
+      UTILITY_IDS.SONGBOOK,
+      UTILITY_IDS.GUITAR_TUNER, // New Utility
       UTILITY_IDS.BAR_LOADER_TESTER,
-      UTILITY_IDS.DOCS_VIEWER, // New Utility
+      UTILITY_IDS.DOCS_VIEWER,
     ];
 
     for (const utilityId of preferredOrder) {
@@ -53,8 +59,11 @@ const AppContent: React.FC = () => {
         if (utilityId === UTILITY_IDS.DISNEY) return "/disney";
         if (utilityId === UTILITY_IDS.GIFTS) return "/gifts";
         if (utilityId === UTILITY_IDS.TRAIN) return "/train";
+        if (utilityId === UTILITY_IDS.PIANO_HELPER) return "/piano-helper";
+        if (utilityId === UTILITY_IDS.SONGBOOK) return "/songbook";
+        if (utilityId === UTILITY_IDS.GUITAR_TUNER) return "/guitar-tuner"; // New Utility
         if (utilityId === UTILITY_IDS.BAR_LOADER_TESTER) return "/bar-loader-tester";
-        if (utilityId === UTILITY_IDS.DOCS_VIEWER) return "/docs"; // New Utility
+        if (utilityId === UTILITY_IDS.DOCS_VIEWER) return "/docs";
       }
     }
     
@@ -70,8 +79,11 @@ const AppContent: React.FC = () => {
              if (utilityId === UTILITY_IDS.DISNEY) return "/disney";
              if (utilityId === UTILITY_IDS.GIFTS) return "/gifts";
              if (utilityId === UTILITY_IDS.TRAIN) return "/train";
+             if (utilityId === UTILITY_IDS.PIANO_HELPER) return "/piano-helper";
+             if (utilityId === UTILITY_IDS.SONGBOOK) return "/songbook";
+             if (utilityId === UTILITY_IDS.GUITAR_TUNER) return "/guitar-tuner"; // New Utility
              if (utilityId === UTILITY_IDS.BAR_LOADER_TESTER) return "/bar-loader-tester";
-             if (utilityId === UTILITY_IDS.DOCS_VIEWER) return "/docs"; // New Utility
+             if (utilityId === UTILITY_IDS.DOCS_VIEWER) return "/docs";
         }
     }
     return "/settings"; 
@@ -89,7 +101,10 @@ const AppContent: React.FC = () => {
           <Route path="/train" element={<ProtectedRoute utilityId={UTILITY_IDS.TRAIN} element={<WorkoutTrackerPage />} />} />
           <Route path="/workouts" element={<ProtectedRoute utilityId={UTILITY_IDS.TRAIN} element={<WorkoutHistoryPage />} />} />
           <Route path="/bar-loader-tester" element={<ProtectedRoute utilityId={UTILITY_IDS.BAR_LOADER_TESTER} element={<BarLoaderTesterPage />} />} />
-          <Route path="/docs" element={<ProtectedRoute utilityId={UTILITY_IDS.DOCS_VIEWER} element={<DocsViewerPage />} />} /> {/* New Utility */}
+          <Route path="/docs" element={<ProtectedRoute utilityId={UTILITY_IDS.DOCS_VIEWER} element={<DocsViewerPage />} />} />
+          <Route path="/piano-helper" element={<ProtectedRoute utilityId={UTILITY_IDS.PIANO_HELPER} element={<PianoHelperPage />} />} />
+          <Route path="/songbook" element={<ProtectedRoute utilityId={UTILITY_IDS.SONGBOOK} element={<SongbookPage />} />} />
+          <Route path="/guitar-tuner" element={<ProtectedRoute utilityId={UTILITY_IDS.GUITAR_TUNER} element={<GuitarTunerPage />} />} /> {/* New Utility */}
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to={getDefaultRoute()} replace />} />
         </Routes>

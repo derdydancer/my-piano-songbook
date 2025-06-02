@@ -26,7 +26,7 @@ The application is organized to separate concerns, making it easier to manage an
 -   **`contexts/`**: For React Context API providers.
     -   `AppDataContext.tsx`: Manages global application state by aggregating data and actions from individual feature modules. Handles data persistence, migration, and global actions (export/import, utility settings).
     -   `ThemeContext.tsx`: Manages application theme (light/dark).
--   **`features/`**: Core directory for distinct application utilities. Each subdirectory represents a utility (e.g., `weight-tracker/`, `gift-assistant/`, `docs-viewer/`). See [Feature Directory Structure](#feature-directory-structure) for details.
+-   **`features/`**: Core directory for distinct application utilities. Each subdirectory represents a utility (e.g., `weight-tracker/`, `gift-assistant/`, `docs-viewer/`, `piano-helper/`, `songbook/`). See [Feature Directory Structure](#feature-directory-structure) for details.
 -   **`hooks/`**: Custom React Hooks (e.g., `useLocalStorage.ts`).
 -   **`services/`**: Modules for external APIs (e.g., `geminiService.ts`).
 -   **`types.ts`**: Global TypeScript type definitions.
@@ -45,11 +45,11 @@ Each utility resides in its own subdirectory within `features/`. For example, `f
 -   **`FeatureNamePage.tsx`**: The main React component for the feature's UI (e.g., `WeightTrackerPage.tsx`).
 -   **`utilityName.constants.ts`**: Constants that are specific to this utility (e.g., `disneyCollection.constants.ts` holds `DISNEY_ANIMATED_CLASSICS`; `docsViewer.constants.ts` lists available documents).
 -   **`utilityName.data.ts`**: Manages the data logic for this utility. It typically exports:
-    *   `initialUtilityNameData`: An object representing the initial state slice for this utility (e.g., `{ weightEntries: [] }`). For utilities like Docs Viewer that don't store global state, this might be minimal or empty.
-    *   `createUtilityNameActions(setAppData, getAppData)`: A function that returns an object of action functions specific to this utility (e.g., `addWeightEntry`, `updateWeightEntry`). These actions are then integrated into the global `AppDataContext`.
+    *   `initialUtilityNameData`: An object representing the initial state slice for this utility (e.g., `{ weightEntries: [] }`). Utilities like `Piano Helper` will include `savedPianoSongs: []` here.
+    *   `createUtilityNameActions(setAppData, getAppData)`: A function that returns an object of action functions specific to this utility (e.g., `addWeightEntry`, `addSavedPianoSong`). These actions are then integrated into the global `AppDataContext`.
     *   `UtilityNameActions` (type): The TypeScript type for the actions object.
--   **`utilityName.sample.ts`**: Contains the sample data specific to this utility, which is then aggregated by the root `sampleData.ts`. For some utilities like Docs Viewer, this may be empty.
--   **`components/`** (optional): Subdirectory for React components specific to this feature.
+-   **`utilityName.sample.ts`**: Contains the sample data specific to this utility, which is then aggregated by the root `sampleData.ts`. For utilities like `Songbook`, this would include `sampleSavedPianoSongs`.
+-   **`components/`** (optional): Subdirectory for React components specific to this feature (e.g., `features/piano-helper/components/PianoChordVisualizer.tsx`).
 -   **`hooks/`** (optional): Custom React Hooks used exclusively by this feature.
 -   **`utils/`** (optional): Utility functions relevant only to this feature.
 -   **`types.ts`** (optional, prefer root `types.ts`): Feature-specific types. If types are broadly applicable or part of the core `AppData`, they belong in the root `types.ts`.
@@ -86,9 +86,11 @@ To track the usage of common components and mitigate the risk of unintended side
  * Used by:
  * - Weight Tracker: Add Weight, Edit, Delete entry buttons; form actions.
  * - Disney Collection: Mark as owned/unowned buttons; filter toggles.
- * - Gift Assistant: New List, Add Gift, AI action buttons; modal actions; list item actions.
+ * - Gift Assistant: New List, Add Gift, AI action buttons; modal actions; list item actions; copy list.
  * - Settings: Export/Import data, Load Sample Data, Theme toggle, Save Plate inventory, Utility toggles.
- * - Workout Tracker: Start workout, set completion (Pass/Fail/Skip), weight adjustment buttons, modal actions.
+ * - Workout Tracker: Start workout, set completion (Pass/Fail/Skip), weight adjustment buttons, timer controls, modal actions.
+ * - Piano Chord Helper: Generate Chords, Upload Image, Take Photo buttons, Save to Songbook.
+ * - Songbook: Delete song button (within CollapsibleSection header).
  * - Various Modals: Standard action buttons (OK, Cancel, Confirm).
  */
 const Button: React.FC<ButtonProps> = ({
@@ -161,11 +163,6 @@ Let's say we want to add a simple "Super Counter" utility that just increments a
           superCounterValue: initialSuperCounterData.superCounterValue,
         }));
       },
-      // Optional: A getter if direct access to this piece of state is preferred by components
-      // getSuperCounterValue: (): number => {
-      //   const appData = getAppData();
-      //   return appData.superCounterValue || 0;
-      // }
     });
     ```
 
@@ -186,7 +183,6 @@ Let's say we want to add a simple "Super Counter" utility that just increments a
 
     const SuperCounterPage: React.FC = () => {
       const { superCounterValue, incrementSuperCounter, decrementSuperCounter, resetSuperCounter } = useAppData();
-      // Note: superCounterValue would now come from appData, managed by the actions
 
       return (
         <div className="p-4 space-y-4">
@@ -206,7 +202,7 @@ Let's say we want to add a simple "Super Counter" utility that just increments a
 6.  **Update Global Types and Constants:**
     *   **`types.ts`**:
         *   Add `'superCounter'` to `UtilityId`: `export type UtilityId = ... | 'superCounter';`
-        *   Update `AppData` interface: `interface AppData { ...; superCounterValue: number; }` (If the utility needs to store data in the global `AppData` object. Docs Viewer, for example, does not currently store data there.)
+        *   Update `AppData` interface: `interface AppData { ...; superCounterValue: number; }`
     *   **`constants.ts`**:
         *   Add to `UTILITY_IDS`: `SUPER_COUNTER: 'superCounter' as UtilityId,`
         *   Add to `DEFAULT_UTILITY_SETTINGS`: `{ id: UTILITY_IDS.SUPER_COUNTER as UtilityId, name: "Super Counter", enabled: true, showInMoreMenu: false },`
@@ -219,18 +215,18 @@ Let's say we want to add a simple "Super Counter" utility that just increments a
         // ...
         export const AI_STUDIO_SAMPLE_DATA: AppData = {
           // ... other sample data slices
-          ...sampleSuperCounterValue, // If it adds to AppData
+          ...sampleSuperCounterValue,
           // ...
         };
         ```
 
 8.  **Update `AppDataContext.tsx`:**
-    *   Import `initialSuperCounterData` (if any), `createSuperCounterActions`, and `SuperCounterActions` from `features/super-counter/superCounter.data.ts`.
-    *   Add `...initialSuperCounterData` to the spread that forms `initialAppData` (if any).
+    *   Import `initialSuperCounterData`, `createSuperCounterActions`, and `SuperCounterActions` from `features/super-counter/superCounter.data.ts`.
+    *   Add `...initialSuperCounterData` to the spread that forms `initialAppData`.
     *   Add `SuperCounterActions` to the `AppDataContextType` union.
     *   Instantiate actions: `const superCounterActions = createSuperCounterActions(setAppData, getAppData);`
     *   Spread `...superCounterActions` into the `contextValue`.
-    *   Ensure the migration `useEffect` in `AppDataContext.tsx` correctly initializes `superCounterValue` if it's undefined in existing user data (e.g., `if (tempAppData.superCounterValue === undefined) { tempAppData.superCounterValue = initialSuperCounterData.superCounterValue; dataChanged = true; }`).
+    *   Ensure the migration `useEffect` in `AppDataContext.tsx` correctly initializes `superCounterValue` if it's undefined in existing user data.
 
 9.  **Configure Routing in `App.tsx`:**
     *   Import `SuperCounterPage`.
@@ -239,10 +235,7 @@ Let's say we want to add a simple "Super Counter" utility that just increments a
 
 10. **Add to Navigation (`BottomNav.tsx`):**
     *   Create an icon (e.g., `PlusMinusIcon`) in `components/common/Icons.tsx`.
-    *   Import it and add a `NavItemDef` to `allNavItems`:
-        ```typescript
-        { to: '/super-counter', utilityId: UTILITY_IDS.SUPER_COUNTER as UtilityId, icon: <PlusMinusIcon className="w-6 h-6" />, label: 'Counter' },
-        ```
+    *   Import it and add a `NavItemDef` to `allNavItems`.
 
 This structured approach ensures new features are well-integrated and maintain the overall organization of the project.
 

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { HomeIcon, FilmIcon, GiftIcon, CogIcon, DumbbellIcon, ClipboardListIcon, DotsHorizontalIcon, BeakerIcon, DocumentTextIcon } from './common/Icons'; // Added DocumentTextIcon
+import { HomeIcon, FilmIcon, GiftIcon, SettingsIcon, DumbbellIcon, WorkoutsListIcon, DotsHorizontalIcon, BarbellIcon, DocumentTextIcon, PianoIcon, BookOpenIcon, TuneForkIcon } from './common/Icons'; // Updated imports
 import { useAppData } from '../contexts/AppDataContext';
 import { UtilityId, UtilitySetting } from '../types';
 import { UTILITY_IDS } from '../constants';
@@ -15,7 +15,7 @@ interface NavItemDef {
 
 interface NavItemProps {
   to: string;
-  icon: React.ReactNode;
+  icon: React.ReactElement<React.SVGProps<SVGSVGElement>>; // Changed from React.ReactNode
   label: string;
   isActive: boolean;
   onClick?: () => void;
@@ -25,10 +25,12 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, isActive, onClick })
   const activeClasses = 'text-primary dark:text-primary';
   const inactiveClasses = 'text-textSecondary hover:text-textPrimary dark:text-textSecondary dark:hover:text-textPrimary';
 
+  // The icon's stroke color is now set in its SVG definition.
+  // The className will affect the label's text color.
   if (onClick) {
     return (
       <button onClick={onClick} className={`flex flex-col items-center justify-center p-2 ${isActive ? activeClasses : inactiveClasses}`}>
-        {icon}
+        {React.cloneElement(icon, { className: `w-6 h-6` })} {/* Removed 'as React.ReactElement' */}
         <span className="text-xs mt-1">{label}</span>
       </button>
     );
@@ -36,7 +38,7 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label, isActive, onClick })
 
   return (
     <Link to={to} className={`flex flex-col items-center justify-center p-2 ${isActive ? activeClasses : inactiveClasses}`}>
-      {icon}
+      {React.cloneElement(icon, { className: `w-6 h-6` })} {/* Removed 'as React.ReactElement' */}
       <span className="text-xs mt-1">{label}</span>
     </Link>
   );
@@ -103,10 +105,13 @@ const BottomNav: React.FC = () => {
     { to: '/disney', utilityId: UTILITY_IDS.DISNEY as UtilityId, icon: <FilmIcon className="w-6 h-6" />, label: 'Disney' },
     { to: '/gifts', utilityId: UTILITY_IDS.GIFTS as UtilityId, icon: <GiftIcon className="w-6 h-6" />, label: 'Gifts' },
     { to: '/train', utilityId: UTILITY_IDS.TRAIN as UtilityId, icon: <DumbbellIcon className="w-6 h-6" />, label: 'Train' },
-    { to: '/workouts', utilityId: UTILITY_IDS.TRAIN as UtilityId, icon: <ClipboardListIcon className="w-6 h-6" />, label: 'Workouts' }, 
-    { to: '/bar-loader-tester', utilityId: UTILITY_IDS.BAR_LOADER_TESTER as UtilityId, icon: <BeakerIcon className="w-6 h-6" />, label: 'Bar Test' },
-    { to: '/docs', utilityId: UTILITY_IDS.DOCS_VIEWER as UtilityId, icon: <DocumentTextIcon className="w-6 h-6" />, label: 'Docs' }, // New Utility
-    { to: '/settings', utilityId: UTILITY_IDS.SETTINGS as UtilityId, icon: <CogIcon className="w-6 h-6" />, label: 'Settings' },
+    { to: '/piano-helper', utilityId: UTILITY_IDS.PIANO_HELPER as UtilityId, icon: <PianoIcon className="w-6 h-6" />, label: 'Piano' },
+    { to: '/songbook', utilityId: UTILITY_IDS.SONGBOOK as UtilityId, icon: <BookOpenIcon className="w-6 h-6" />, label: 'Songbook' },
+    { to: '/guitar-tuner', utilityId: UTILITY_IDS.GUITAR_TUNER as UtilityId, icon: <TuneForkIcon className="w-6 h-6" />, label: 'Tuner' },
+    { to: '/workouts', utilityId: UTILITY_IDS.TRAIN as UtilityId, icon: <WorkoutsListIcon className="w-6 h-6" />, label: 'Workouts' }, 
+    { to: '/bar-loader-tester', utilityId: UTILITY_IDS.BAR_LOADER_TESTER as UtilityId, icon: <BarbellIcon className="w-6 h-6" />, label: 'Bar Test' },
+    { to: '/docs', utilityId: UTILITY_IDS.DOCS_VIEWER as UtilityId, icon: <DocumentTextIcon className="w-6 h-6" />, label: 'Docs' },
+    { to: '/settings', utilityId: UTILITY_IDS.SETTINGS as UtilityId, icon: <SettingsIcon className="w-6 h-6" />, label: 'Settings' },
   ];
   
   const getActualUtilitySetting = (id: UtilityId): UtilitySetting | undefined => {
@@ -123,13 +128,9 @@ const BottomNav: React.FC = () => {
     return utility?.enabled && !utility.showInMoreMenu;
   });
 
-  // Logic for items that appear in the "More" menu
-  // An item appears in "More" if its utility is enabled AND showInMoreMenu is true.
   const moreMenuItemsFromSettings = allNavItems.filter(item => {
-    const utility = getUtilitySetting(item.utilityId); // Use direct utility setting for showInMoreMenu check
+    const utility = getUtilitySetting(item.utilityId); 
     
-    // Handle 'Workouts' specifically: it uses the 'Train' utility's enabled status,
-    // but its own showInMoreMenu behavior (if it were distinct, or if Train is in More)
     if (item.label === 'Workouts') {
       const trainUtilitySetting = getUtilitySetting(UTILITY_IDS.TRAIN as UtilityId);
       return trainUtilitySetting?.enabled && trainUtilitySetting.showInMoreMenu;
@@ -138,15 +139,10 @@ const BottomNav: React.FC = () => {
     return utility?.enabled && utility.showInMoreMenu;
   });
 
-  // Deduplicate and ensure correct items are in the "More" menu based on showInMoreMenu logic
   const uniqueMoreMenuItems = moreMenuItemsFromSettings.reduce((acc, current) => {
     const isAlreadyAdded = acc.some(item => item.label === current.label);
     if (!isAlreadyAdded) {
-      // If 'Train' is in "More", and 'Workouts' is also configured for "More", both should appear.
-      // If 'Workouts' is in "More" (because 'Train' is in "More"), but 'Train' itself isn't, 'Workouts' logic handles it.
       acc.push(current);
-
-      // If adding 'Train' and 'Workouts' is also in moreMenuItems (meaning Train utility is enabled and showInMoreMenu), add 'Workouts' if not present.
       if (current.utilityId === UTILITY_IDS.TRAIN && current.label === 'Train') {
         const workoutsNavItem = allNavItems.find(i => i.label === 'Workouts');
         const trainUtilitySetting = getUtilitySetting(UTILITY_IDS.TRAIN as UtilityId);
@@ -158,7 +154,6 @@ const BottomNav: React.FC = () => {
     return acc;
   }, [] as NavItemDef[]);
   
-  // Sort "More" menu items according to their original order in allNavItems
   uniqueMoreMenuItems.sort((a, b) => {
     const aIndex = allNavItems.findIndex(item => item.label === a.label);
     const bIndex = allNavItems.findIndex(item => item.label === b.label);
@@ -180,17 +175,29 @@ const BottomNav: React.FC = () => {
         ))}
         {uniqueMoreMenuItems.length > 0 && (
           <div className="relative">
-            <button 
+            <NavItem
+                to="#" // Placeholder, action is handled by onClick
+                icon={<DotsHorizontalIcon className="w-6 h-6" />}
+                label="More"
+                isActive={isMoreMenuOpen}
+                onClick={() => { 
+                  if (moreMenuButtonRef.current) { // Use the button ref for positioning if needed
+                     // The NavItem is now a Link, so we need a separate button or handle click differently
+                  }
+                  setIsMoreMenuOpen(prev => !prev);
+                }}
+             />
+            {/* The button below is now styled like a NavItem but is a button for ARIA and click handling */}
+             <button 
                 ref={moreMenuButtonRef} 
                 onClick={() => setIsMoreMenuOpen(prev => !prev)} 
-                className="flex flex-col items-center justify-center p-2 focus:outline-none"
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" // Overlay button
                 aria-haspopup="true"
                 aria-expanded={isMoreMenuOpen}
-                aria-controls="more-menu-popover"
-                id="more-menu-button"
+                aria-controls="more-menu-popover" // Ensure this ID matches the Popover's aria-labelledby or similar
+                id="more-menu-button" // For aria-labelledby
+                aria-label="More options"
             >
-                <DotsHorizontalIcon className={`w-6 h-6 ${isMoreMenuOpen ? 'text-primary dark:text-primary' : 'text-textSecondary hover:text-textPrimary dark:text-textSecondary dark:hover:text-textPrimary'}`} />
-                <span className={`text-xs mt-1 ${isMoreMenuOpen ? 'text-primary dark:text-primary' : 'text-textSecondary hover:text-textPrimary dark:text-textSecondary dark:hover:text-textPrimary'}`}>More</span>
             </button>
             {isMoreMenuOpen && <MoreMenuPopover items={uniqueMoreMenuItems} onClose={() => setIsMoreMenuOpen(false)} parentRef={moreMenuButtonRef} />}
           </div>
