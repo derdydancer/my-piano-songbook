@@ -1,7 +1,6 @@
-
 import React, { createContext, useContext, ReactNode, useCallback, useEffect, useState } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
-import { AppData, WeightEntry, DisneyOwnedStatus, GiftRecipientList, GiftItem, Plate, ExerciseSettings, WorkoutSession, LiftType, UtilitySetting, UtilityId, SinglePersonGiftSuggestion, ProcessedAIResults, ManualGiftItemData, AISuggestedGiftItem, SavedPianoSong, SavedUniqueChordDefinition } from '../types';
+import { AppData, WeightEntry, DisneyOwnedStatus, GiftRecipientList, GiftItem, Plate, ExerciseSettings, WorkoutSession, LiftType, UtilitySetting, UtilityId, SinglePersonGiftSuggestion, ProcessedAIResults, ManualGiftItemData, AISuggestedGiftItem, SavedPianoSong, SavedUniqueChordDefinition, ActiveWorkoutState, ActiveSetInfo } from '../types';
 import { DEFAULT_UTILITY_SETTINGS, UTILITY_IDS } from '../constants'; // Global constants
 import { AI_STUDIO_SAMPLE_DATA } from '../sampleData'; // Aggregated sample data
 
@@ -32,6 +31,7 @@ interface AppDataCoreContextType {
   weightEntries: WeightEntry[];
   disneyCollection: DisneyOwnedStatus[];
   savedPianoSongs: SavedPianoSong[]; // Exposed for Songbook to read
+  activeWorkoutState?: ActiveWorkoutState | null; // Expose active workout state
   // Note: workoutTracker specific actions like generateSetsForExercise are part of WorkoutTrackerActions
 }
 
@@ -54,7 +54,7 @@ const initialAppData: AppData = {
   ...initialWeightTrackerData,
   ...initialDisneyCollectionData,
   ...initialGiftAssistantData,
-  ...initialWorkoutTrackerData,
+  ...initialWorkoutTrackerData, // Includes activeWorkoutState: null
   ...initialBarLoaderTesterData, 
   ...initialDocsViewerData,
   ...initialPianoHelperData, // Contains initial savedPianoSongs: []
@@ -136,6 +136,15 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                             (currentLiftSetting as any)[K] = defaultLiftSetting[K];
                             settingsUpdated = true;
                         }
+                         // Check for default timer values
+                        if (K === 'defaultTimerWarmup' && currentLiftSetting[K] === undefined) {
+                            currentLiftSetting[K] = defaultLiftSetting[K] || 90;
+                            settingsUpdated = true;
+                        }
+                        if (K === 'defaultTimerWorkset' && currentLiftSetting[K] === undefined) {
+                            currentLiftSetting[K] = defaultLiftSetting[K] || 180;
+                            settingsUpdated = true;
+                        }
                     }
                 } else {
                     tempAppData.exerciseSettings[lift] = defaultSettings[lift];
@@ -149,6 +158,12 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
       tempAppData.workoutSessions = [];
       dataChanged = true;
     }
+    // Ensure activeWorkoutState is initialized
+    if (tempAppData.activeWorkoutState === undefined) {
+        tempAppData.activeWorkoutState = null;
+        dataChanged = true;
+    }
+
 
     if (!tempAppData.utilitySettings || tempAppData.utilitySettings.length === 0) {
         tempAppData.utilitySettings = DEFAULT_UTILITY_SETTINGS;
@@ -162,16 +177,12 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
             const existingSetting = currentSettingsMap.get(defaultSetting.id);
             if (existingSetting) {
                 let needsUpdate = false;
-                // Ensure all properties from defaultSetting are present, preserving existing values
                 const updatedExistingSetting = { ...defaultSetting, ...existingSetting };
-                if (updatedExistingSetting.id === UTILITY_IDS.SETTINGS) { // Ensure settings is always enabled
+                if (updatedExistingSetting.id === UTILITY_IDS.SETTINGS) { 
                     updatedExistingSetting.enabled = true; 
                 }
-                // Check if any property defined in defaultSetting is missing or different in existingSetting
                 for (const key in defaultSetting) {
                     if ((defaultSetting as any)[key] !== (existingSetting as any)[key]) {
-                        //This logic was flawed, if a default property was added, it would always trigger update
-                        //Only trigger if a property in defaultSetting is NOT in existingSetting, or if it exists AND it's different
                         if (!(key in existingSetting) || (defaultSetting as any)[key] !== (existingSetting as any)[key]) {
                            needsUpdate = true;
                            break;
@@ -179,18 +190,16 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                     }
                 }
                  if(!needsUpdate && Object.keys(existingSetting).length !== Object.keys(updatedExistingSetting).length){
-                     needsUpdate = true; // If properties were added from default
+                     needsUpdate = true; 
                  }
 
                 mergedSettings.push(updatedExistingSetting);
                 if(needsUpdate) utilitiesChanged = true;
             } else {
-                // New utility added to DEFAULT_UTILITY_SETTINGS
                 mergedSettings.push(defaultSetting); 
                 utilitiesChanged = true;
             }
         });
-        // Ensure no old/removed utilities linger
         const validUtilityIds = new Set(DEFAULT_UTILITY_SETTINGS.map(s => s.id));
         const finalMergedSettings = mergedSettings.filter(s => validUtilityIds.has(s.id));
 
@@ -232,26 +241,23 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
       }
     }
     
-    // Migration for savedPianoSongs structure
     if (tempAppData.savedPianoSongs === undefined) {
       tempAppData.savedPianoSongs = initialPianoHelperData.savedPianoSongs;
       dataChanged = true;
     } else {
-      // Check if migration for SavedUniqueChordDefinition is needed
       let pianoSongsMigrationNeeded = false;
       tempAppData.savedPianoSongs.forEach(song => {
         if (song.analysisResult && song.analysisResult.uniqueChords) {
-          song.analysisResult.uniqueChords.forEach((chord: any) => { // Use 'any' for old structure check
-            if (chord.notes && !chord.selectedNotes) { // Old structure had 'notes'
+          song.analysisResult.uniqueChords.forEach((chord: any) => { 
+            if (chord.notes && !chord.selectedNotes) { 
               pianoSongsMigrationNeeded = true;
-              // Simple migration: assume AI's notes are the selected ones, index 0
               chord.selectedNotes = chord.notes;
               chord.selectedVoicingIndex = 0; 
-              delete chord.notes; // Remove old field
-              delete chord.aiSuggestedNotes; // Remove if it was transiently added
+              delete chord.notes; 
+              delete chord.aiSuggestedNotes; 
             }
              if (chord.selectedVoicingIndex === undefined) {
-                chord.selectedVoicingIndex = 0; // Default if missing
+                chord.selectedVoicingIndex = 0; 
                 pianoSongsMigrationNeeded = true;
              }
           });
@@ -278,7 +284,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         });
          data.giftRecipientLists.sort((a,b) => a.orderIndex - b.orderIndex);
       }
-      const completeImportData = { ...initialAppData, ...data };
+      // Ensure activeWorkoutState is part of imported data, or initialize it
+      const completeImportData = { ...initialAppData, ...data, activeWorkoutState: data.activeWorkoutState !== undefined ? data.activeWorkoutState : null };
       setAppData(completeImportData); 
       return true;
     } else {
@@ -324,7 +331,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
   const docsViewerActions = createDocsViewerActions(setAppData, getAppDataForActions);
   const pianoHelperActions = createPianoHelperActions(setAppData, getAppDataForActions);
   const songbookActions = createSongbookActions(setAppData, getAppDataForActions);
-  const guitarTunerActions = createGuitarTunerActions(setAppData, getAppDataForActions); // New Utility Actions
+  const guitarTunerActions = createGuitarTunerActions(setAppData, getAppDataForActions); 
 
 
   const contextValue: AppDataContextType = {
@@ -336,7 +343,8 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     getUtilitySetting,
     weightEntries: appData.weightEntries,
     disneyCollection: appData.disneyCollection,
-    savedPianoSongs: appData.savedPianoSongs, // Expose saved songs
+    savedPianoSongs: appData.savedPianoSongs, 
+    activeWorkoutState: appData.activeWorkoutState,
     ...weightTrackerActions,
     ...disneyCollectionActions,
     ...giftAssistantActions,
@@ -345,7 +353,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     ...docsViewerActions,
     ...pianoHelperActions,
     ...songbookActions,
-    ...guitarTunerActions, // New Utility Actions
+    ...guitarTunerActions, 
   };
   
   return (

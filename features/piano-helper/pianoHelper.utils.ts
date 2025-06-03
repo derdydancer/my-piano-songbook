@@ -1,3 +1,4 @@
+
 // features/piano-helper/pianoHelper.utils.ts
 
 export const NOTE_MIDI_VALUES: { [key: string]: number } = {
@@ -13,10 +14,12 @@ const MIDI_NOTE_NAMES_FLAT: string[] = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G
 export const getNoteMidiValue = (note: string): number | null => {
     const match = note.match(/^([A-Ga-g][#b]?)([0-9])$/);
     if (!match) return null;
-    const noteName = match[1].toUpperCase();
+    const noteNamePart = match[1];
+    // Ensure first letter is uppercase for NOTE_MIDI_VALUES lookup
+    const normalizedNoteName = noteNamePart.charAt(0).toUpperCase() + noteNamePart.slice(1);
     const octave = parseInt(match[2], 10);
 
-    const baseMidi = NOTE_MIDI_VALUES[noteName];
+    const baseMidi = NOTE_MIDI_VALUES[normalizedNoteName];
     if (baseMidi === undefined) return null;
 
     return baseMidi + (octave + 1) * 12; // MIDI C4 is 60, C0 is 12
@@ -29,6 +32,26 @@ export const getNoteFromMidiValue = (midi: number, preferSharp: boolean = true):
     return `${noteName}${octave}`;
 };
 
+export const normalizeNoteToSharp = (noteNameWithOctave: string): string => {
+    const midiValue = getNoteMidiValue(noteNameWithOctave);
+    if (midiValue !== null) {
+        return getNoteFromMidiValue(midiValue, true); // true for preferSharp
+    }
+    // Fallback for notes that can't be converted to MIDI (e.g., malformed)
+    const simpleFlatToSharp: Record<string, string> = {
+        'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#'
+    };
+    const noteMatch = noteNameWithOctave.match(/^([A-Ga-g][#b]?)([0-9])$/);
+    if (noteMatch) {
+        const notePart = noteMatch[1];
+        const octavePart = noteMatch[2];
+        if (simpleFlatToSharp[notePart]) {
+            return `${simpleFlatToSharp[notePart]}${octavePart}`;
+        }
+    }
+    return noteNameWithOctave; // Return original if no conversion possible
+};
+
 
 export interface ChordParseResult {
     rootNote: string; // e.g., "C", "F#"
@@ -37,42 +60,40 @@ export interface ChordParseResult {
 }
 
 export const getChordRootAndType = (chordName: string): ChordParseResult | null => {
-    // Regex to capture root, quality/type, and optional bass note
-    // Supports: C, Cm, Cmaj7, C7, Cm7, Cdim, Caug, C#, Cb, C#m7, C/G, C#m7/G#
-    const chordRegex = /^([A-Ga-g][#b]?)(maj7|m7b5|m7|7|dim7|dim|aug|m|M|maj|sus4|sus2|sus)?(?:add([0-9]+))?(?:\(([#b]?[0-9]+(?:,[#b]?[0-9]+)*)\))?(?:\/([A-Ga-g][#b]?))?$/;
+    // Order matters: longer/more specific alternatives first
+    // Changed \/ to [/] for matching the slash in bass notes
+    const chordRegex = /^([A-Ga-g][#b]?)(min7b5|dom7b5|m7-5|dom7#5|maj7|maj6|min6|sus4|sus2|dim7|m7b5|7b5|7-5|7#5|7\+5|m7|m6|dim|aug|maj|sus|M|m|7|6)?(?:add([0-9]+))?(?:\(([#b]?[0-9]+(?:,[#b]?[0-9]+)*)\))?(?:[/]([A-Ga-g][#b]?))?$/;
 
     const match = chordName.match(chordRegex);
     if (!match) return null;
 
     let rootNote = match[1];
-    let typePart = match[2] || ''; // e.g., m7, maj7, 7, dim, aug, m, M
-    const addPart = match[3]; // e.g., 9 for add9
-    const alterationsPart = match[4]; // e.g., b5,#9
+    let typePart = match[2] || ''; 
     const bassNote = match[5];
 
-    // Normalize root note (e.g., c# -> C#)
     rootNote = rootNote.charAt(0).toUpperCase() + (rootNote.length > 1 ? rootNote.substring(1) : '');
 
-    // Normalize type
-    if (typePart === 'M' || typePart === 'maj' || typePart === '') typePart = 'maj';
-    if (typePart === 'm') typePart = 'min'; // Standardize to 'min' for minor
-    // m7, maj7, 7, dim, aug are usually fine
-    // m7b5 is also fine
-    if (typePart === 'dim7') typePart = 'dim7'; // Keep distinct from 'dim' (triad)
-
-
-    // Basic mapping, can be expanded for complex chords (sus, add, alterations)
     let finalChordType = typePart;
-    if (typePart === 'maj' && !addPart && !alterationsPart) finalChordType = 'maj'; // Major triad
-    else if (typePart === 'min' && !addPart && !alterationsPart) finalChordType = 'min'; // Minor triad
-    else if (typePart === '7') finalChordType = 'dom7'; // Dominant 7th
-    else if (typePart === 'maj7') finalChordType = 'maj7';
-    else if (typePart === 'm7') finalChordType = 'min7';
-    else if (typePart === 'm7b5') finalChordType = 'm7b5'; // Half-diminished
-    else if (typePart === 'dim') finalChordType = 'dim'; // Diminished triad
-    else if (typePart === 'dim7') finalChordType = 'dim7'; // Diminished 7th
-    else if (typePart === 'aug') finalChordType = 'aug'; // Augmented triad
-    // TODO: Handle sus, add, alterations if needed for more complex chords.
+    if (typePart === 'M' || typePart === 'maj' || typePart === '') {
+        finalChordType = 'maj';
+    } else if (typePart === 'm') {
+        finalChordType = 'min';
+    } else if (typePart === '7') {
+        finalChordType = 'dom7';
+    } else if (typePart === '6' || typePart === 'maj6') {
+        finalChordType = 'maj6';
+    } else if (typePart === 'm6' || typePart === 'min6') {
+        finalChordType = 'min6';
+    } else if (typePart === '7-5' || typePart === '7b5' || typePart === 'dom7b5') {
+        finalChordType = 'dom7b5';
+    } else if (typePart === '7#5' || typePart === '7+5' || typePart === 'dom7#5') {
+        finalChordType = 'dom7#5';
+    } else if (typePart === 'm7-5' || typePart === 'min7b5' || typePart === 'm7b5') { // ensure m7b5 from regex is covered
+        finalChordType = 'min7b5'; // Normalized type
+    } else if (typePart === 'sus') {
+        finalChordType = 'sus4'; // Default 'sus' to 'sus4'
+    }
+    // Other types like maj7, min7, dim, aug, dim7, sus4, sus2 remain as captured by regex if not normalized above.
 
     return {
         rootNote,
@@ -84,17 +105,22 @@ export const getChordRootAndType = (chordName: string): ChordParseResult | null 
 // Returns MIDI intervals from the root note (0)
 export const getIntervalsForChordType = (chordType: string): number[] => {
     switch (chordType) {
-        case 'maj': return [0, 4, 7]; // Root, Major 3rd, Perfect 5th
-        case 'min': return [0, 3, 7]; // Root, Minor 3rd, Perfect 5th
-        case 'dom7': return [0, 4, 10]; // Root, Major 3rd, Minor 7th (5th omitted per rule)
-        case 'maj7': return [0, 4, 7, 11]; // Root, Major 3rd, Perfect 5th, Major 7th
-        case 'min7': return [0, 3, 7, 10]; // Root, Minor 3rd, Perfect 5th, Minor 7th
-        case 'dim': return [0, 3, 6]; // Root, Minor 3rd, Diminished 5th
-        case 'aug': return [0, 4, 8]; // Root, Major 3rd, Augmented 5th
-        case 'm7b5': return [0, 3, 6, 10]; // Root, Minor 3rd, Diminished 5th, Minor 7th (Half-diminished)
-        case 'dim7': return [0, 3, 6, 9]; // Root, Minor 3rd, Diminished 5th, Diminished 7th (Fully diminished)
-        // Add more complex types as needed
-        default: return [0, 4, 7]; // Default to major triad if type unknown
+        case 'maj': return [0, 4, 7]; 
+        case 'min': return [0, 3, 7]; 
+        case 'dom7': return [0, 4, 10]; // Omitting 5th for 3-note voicing
+        case 'maj7': return [0, 4, 7, 11]; 
+        case 'min7': return [0, 3, 7, 10]; 
+        case 'dim': return [0, 3, 6]; 
+        case 'aug': return [0, 4, 8]; 
+        case 'min7b5': return [0, 3, 6, 10]; // also m7b5
+        case 'dim7': return [0, 3, 6, 9]; 
+        case 'maj6': return [0, 4, 7, 9]; 
+        case 'min6': return [0, 3, 7, 9]; 
+        case 'dom7b5': return [0, 4, 6, 10]; // Root, M3, b5, m7
+        case 'dom7#5': return [0, 4, 8, 10]; // Root, M3, #5, m7
+        case 'sus4': return [0, 5, 7]; 
+        case 'sus2': return [0, 2, 7];
+        default: return []; // Return empty for unknown types, generateChordVoicings will then use AI notes if available.
     }
 };
 
@@ -103,62 +129,91 @@ export const generateChordVoicings = (
     chordNameStr: string,
     minMidi: number = 36, // C2
     maxMidi: number = 84, // C6
+    aiSuggestedNotesInput?: string[]
 ): string[][] => {
+    const allVoicingsSet = new Set<string>();
     const parsedChord = getChordRootAndType(chordNameStr);
-    if (!parsedChord) return [];
 
-    const rootMidiVal = getNoteMidiValue(parsedChord.rootNote + "0"); // Get root midi for octave 0 as base
-    if (rootMidiVal === null) return [];
-    
-    const intervals = getIntervalsForChordType(parsedChord.chordType);
-    const numNotesInChord = intervals.length;
+    if (parsedChord) {
+        const rootMidiVal = getNoteMidiValue(parsedChord.rootNote + "0"); 
+        const intervals = getIntervalsForChordType(parsedChord.chordType);
 
-    const allVoicingsSet = new Set<string>(); // To store stringified sorted voicings to ensure uniqueness
+        if (rootMidiVal !== null && intervals.length > 0) {
+            const numNotesInChord = intervals.length;
+            for (let octaveOffset = 2; octaveOffset <= 4; octaveOffset++) { 
+                const currentRootMidi = rootMidiVal + octaveOffset * 12;
+                const baseVoicingMidi = intervals.map(interval => currentRootMidi + interval);
 
-    // Iterate through possible octaves for the root note to start generating base voicings
-    for (let octaveOffset = 2; octaveOffset <= 4; octaveOffset++) { // Start root around octave 2, 3, 4
-        const currentRootMidi = rootMidiVal + octaveOffset * 12;
-        
-        const baseVoicingMidi = intervals.map(interval => currentRootMidi + interval);
+                for (let i = 0; i < numNotesInChord; i++) { 
+                    let inversionMidi = [...baseVoicingMidi];
+                    for (let j = 0; j < i; j++) {
+                        inversionMidi[j] += 12; 
+                    }
+                    inversionMidi.sort((a, b) => a - b); 
 
-        // Generate inversions for this base voicing
-        for (let i = 0; i < numNotesInChord; i++) { // i is the number of notes to move to top
-            let inversionMidi = [...baseVoicingMidi];
-            for (let j = 0; j < i; j++) {
-                inversionMidi[j] += 12; // Move the j-th note (originally lowest) up an octave
+                    for (let octaveShift = -1; octaveShift <= 1; octaveShift++) { 
+                        const shiftedInversionMidi = inversionMidi.map(note => note + octaveShift * 12);
+                        const lowestNote = Math.min(...shiftedInversionMidi);
+                        const highestNote = Math.max(...shiftedInversionMidi);
+                        if (lowestNote >= minMidi && highestNote <= maxMidi) {
+                            const voicingNotesStr = shiftedInversionMidi.map(midi => getNoteFromMidiValue(midi, true));
+                            allVoicingsSet.add(JSON.stringify(voicingNotesStr.sort())); 
+                        }
+                    }
+                }
             }
-            inversionMidi.sort((a, b) => a - b); // Keep notes in order
+        } else if (aiSuggestedNotesInput && aiSuggestedNotesInput.length > 0) {
+            // Fallback to AI suggested notes if intervals are unknown for a parsed chord type
+            const normalizedAiNotes = aiSuggestedNotesInput.map(normalizeNoteToSharp);
+            const normalizedAiNotesMidi = normalizedAiNotes.map(n => getNoteMidiValue(n)).filter(m => m !== null) as number[];
 
-            // Generate octave shifts for this specific inversion
-            for (let octaveShift = -1; octaveShift <= 1; octaveShift++) { // Shift up/down one octave
-                const shiftedInversionMidi = inversionMidi.map(note => note + octaveShift * 12);
+            if (normalizedAiNotesMidi.length === normalizedAiNotes.length && normalizedAiNotesMidi.length > 0) {
+                normalizedAiNotesMidi.sort((a, b) => a - b);
+                const baseLowestMidi = normalizedAiNotesMidi[0];
+                const relativeIntervals = normalizedAiNotesMidi.map(midi => midi - baseLowestMidi);
+                const maxRelativeInterval = Math.max(...relativeIntervals);
 
-                // Check if this voicing is within the desired piano range
-                const lowestNote = Math.min(...shiftedInversionMidi);
-                const highestNote = Math.max(...shiftedInversionMidi);
-                if (lowestNote >= minMidi && highestNote <= maxMidi) {
-                    const voicingNotesStr = shiftedInversionMidi.map(midi => getNoteFromMidiValue(midi, true));
-                    allVoicingsSet.add(JSON.stringify(voicingNotesStr.sort())); // Store sorted string to ensure uniqueness of note sets
+                for (let currentLowestNoteMidi = minMidi; currentLowestNoteMidi <= maxMidi - maxRelativeInterval; currentLowestNoteMidi++) {
+                    const potentialVoicingMidi = relativeIntervals.map(interval => currentLowestNoteMidi + interval);
+                    if (potentialVoicingMidi.every(midi => midi >= minMidi && midi <= maxMidi)) {
+                        const voicingNotesStr = potentialVoicingMidi.map(midi => getNoteFromMidiValue(midi, true));
+                        allVoicingsSet.add(JSON.stringify(voicingNotesStr.sort()));
+                    }
+                }
+            }
+        }
+    } else if (aiSuggestedNotesInput && aiSuggestedNotesInput.length > 0) {
+        // Fallback if chordNameStr is not parseable at all, but AI notes are provided
+        const normalizedAiNotes = aiSuggestedNotesInput.map(normalizeNoteToSharp);
+        const normalizedAiNotesMidi = normalizedAiNotes.map(n => getNoteMidiValue(n)).filter(m => m !== null) as number[];
+
+        if (normalizedAiNotesMidi.length === normalizedAiNotes.length && normalizedAiNotesMidi.length > 0) {
+            normalizedAiNotesMidi.sort((a, b) => a - b);
+            const baseLowestMidi = normalizedAiNotesMidi[0];
+            const relativeIntervals = normalizedAiNotesMidi.map(midi => midi - baseLowestMidi);
+            const maxRelativeInterval = Math.max(...relativeIntervals);
+            
+            for (let currentLowestNoteMidi = minMidi; currentLowestNoteMidi <= maxMidi - maxRelativeInterval; currentLowestNoteMidi++) {
+                const potentialVoicingMidi = relativeIntervals.map(interval => currentLowestNoteMidi + interval);
+                 // Check if all notes in the potential voicing are within the maxMidi range as well.
+                // The loop condition `currentLowestNoteMidi <= maxMidi - maxRelativeInterval` ensures the highest note won't exceed maxMidi.
+                // The `currentLowestNoteMidi >= minMidi` part is implicitly handled by loop start.
+                if (potentialVoicingMidi.every(midi => midi <= maxMidi)) { // Simplified check
+                    const voicingNotesStr = potentialVoicingMidi.map(midi => getNoteFromMidiValue(midi, true));
+                    allVoicingsSet.add(JSON.stringify(voicingNotesStr.sort()));
                 }
             }
         }
     }
 
-    // Convert unique stringified voicings back to arrays of notes
-    const uniqueVoicings: string[][] = Array.from(allVoicingsSet).map(strVoicing => JSON.parse(strVoicing));
 
-    // Sort voicings: primary sort by lowest note, secondary by sum of MIDI values (as a tie-breaker for compactness)
+    const uniqueVoicings: string[][] = Array.from(allVoicingsSet).map(strVoicing => JSON.parse(strVoicing));
     uniqueVoicings.sort((voicingA, voicingB) => {
         const midiA = voicingA.map(n => getNoteMidiValue(n) || 0);
         const midiB = voicingB.map(n => getNoteMidiValue(n) || 0);
-        
         const lowestA = Math.min(...midiA);
         const lowestB = Math.min(...midiB);
-
-        if (lowestA !== lowestB) {
-            return lowestA - lowestB;
-        }
-        // Tie-breaker: sum of midi values (lower sum might mean more compact voicing for the same lowest note)
+        if (lowestA !== lowestB) return lowestA - lowestB;
         const sumA = midiA.reduce((s, n) => s + n, 0);
         const sumB = midiB.reduce((s, n) => s + n, 0);
         return sumA - sumB;
@@ -169,11 +224,11 @@ export const generateChordVoicings = (
 
 
 export const calculateRequiredOctavesAndStartForVoicing = (
-  notes: string[], // A single voicing (array of note strings)
-  preferredOctaveSpan?: number // The number of octaves you'd LIKE to display it in
+  notes: string[], 
+  preferredOctaveSpan?: number 
 ): { numOctaves: number; startOctave: number } => {
   if (!notes || notes.length === 0) {
-    return { numOctaves: preferredOctaveSpan || 2, startOctave: 3 }; // Default
+    return { numOctaves: preferredOctaveSpan || 2, startOctave: 3 }; 
   }
 
   const midiValues = notes.map(note => getNoteMidiValue(note) || 0).filter(mv => mv > 0);
@@ -184,7 +239,6 @@ export const calculateRequiredOctavesAndStartForVoicing = (
   const minMidi = Math.min(...midiValues);
   const maxMidi = Math.max(...midiValues);
   
-  // Minimum number of octaves strictly required to show all notes in this single voicing
   const actualMinOctavesForVoicing = Math.max(1, Math.ceil((maxMidi - minMidi + 1) / 12));
 
   let targetNumOctaves = preferredOctaveSpan 
@@ -229,7 +283,7 @@ export const calculateOverallOctaveRange = (
   defaultStartOctave: number = 3
 ): { numOctaves: number; startOctave: number } => {
   const allMidiValues = allNoteSets
-    .flat() // Flatten the array of arrays into a single array of notes
+    .flat() 
     .map(note => getNoteMidiValue(note))
     .filter(mv => mv !== null) as number[];
 
@@ -241,19 +295,12 @@ export const calculateOverallOctaveRange = (
   const maxMidi = Math.max(...allMidiValues);
 
   let numOctaves = Math.ceil((maxMidi - minMidi + 1) / 12);
-  numOctaves = Math.max(1, numOctaves); // Ensure at least 1 octave
+  numOctaves = Math.max(1, numOctaves); 
 
-  // Calculate startOctave based on the absolute minMidi
-  // MIDI C0 = 12, C1 = 24, ..., Octave 'o' starts at (o+1)*12
-  // So, octave = floor(midi/12) - 1
   let startOctave = Math.floor((minMidi -12) / 12);
 
-  // Clamp startOctave to valid range (e.g., 0 to 7 for C0-C7, if max 8 total octaves displayed)
-  // The highest possible start octave is such that startOctave + numOctaves - 1 < 8 (max typical piano display)
-  // So, startOctave < 8 - numOctaves + 1
   startOctave = Math.max(0, Math.min(startOctave, 8 - numOctaves)); 
   
-  // Adjust numOctaves if clamping startOctave pushes maxMidi out of view
   if (startOctave + numOctaves -1 < Math.floor((maxMidi-12)/12) ) {
       numOctaves = Math.floor((maxMidi-12)/12) - startOctave + 1;
   }

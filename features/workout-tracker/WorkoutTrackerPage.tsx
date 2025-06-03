@@ -1,15 +1,15 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAppData } from '../../contexts/AppDataContext';
-import { WorkoutDefinition, WorkoutSession, ExerciseLog, SetDetails, LiftType, ActiveSetInfo, PlateCombination, WorkoutMode } from '../../types';
+import { WorkoutDefinition, WorkoutSession, ExerciseLog, SetDetails, LiftType, ActiveSetInfo, PlateCombination, WorkoutMode, ActiveWorkoutState } from '../../types';
 import Button from '../../components/common/Button';
 import Modal from '../../components/Modal';
 import Select from '../../components/common/Select';
 import Input from '../../components/common/Input';
-import { PlusCircleIcon, RefreshCwIcon, CheckCircleIcon, XCircleIcon, ChevronDownIcon, ChevronUpIcon, MinusIcon, PlusIcon, ArrowLeftIcon } from '../../components/common/Icons';
+import { PlusCircleIcon, RefreshCwIcon, CheckCircleIcon, XCircleIcon, ChevronDownIcon, ChevronUpIcon, MinusIcon, PlusIcon, ArrowLeftIcon, XMarkIcon } from '../../components/common/Icons';
 import LoadingSpinner from '../../components/LoadingSpinner';
+import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { formatPlateCombination, findClosestLoadableWeight, findNextLoadableWeight } from '../../utils/workoutHelper';
-import { BAR_WEIGHT, DEFAULT_TIMER_WARMUP_SECONDS, DEFAULT_TIMER_WORKSET_SECONDS, WORKOUT_DEFINITIONS as APP_WORKOUT_DEFINITIONS } from './workoutTracker.constants'; // Renamed import
+import { BAR_WEIGHT, DEFAULT_TIMER_WARMUP_SECONDS, DEFAULT_TIMER_WORKSET_SECONDS, WORKOUT_DEFINITIONS as APP_WORKOUT_DEFINITIONS } from './workoutTracker.constants'; 
 import BarbellVisualizer from './components/BarbellVisualizer';
 import SetTimer from './components/SetTimer';
 import ExerciseProgressBar from './components/ExerciseProgressBar';
@@ -19,13 +19,19 @@ import ActiveWorkoutSetsDisplay from './components/ActiveWorkoutSetsDisplay';
 const WorkoutTrackerPage: React.FC = () => {
   const {
     getAvailableWorkoutDefinitions,
-    getLastWorkoutSession, // Still useful for displaying last session of specific type
-    getAllWorkoutSessions, // Used for determining next workout type
+    getLastWorkoutSession, 
+    getAllWorkoutSessions, 
     getProposedWorksetWeight,
     generateSetsForExercise,
     addWorkoutSession,
     getExerciseSettings,
     getPlateInventory,
+    // Actions for active workout state
+    startActiveWorkout,
+    updateActiveWorkoutProgress,
+    cancelActiveWorkout: appDataCancelActiveWorkout,
+    getActiveWorkoutState,
+    updateActiveSetTimerState,
   } = useAppData();
 
   const exerciseSettings = getExerciseSettings();
@@ -42,12 +48,25 @@ const WorkoutTrackerPage: React.FC = () => {
   const [activeSetInfo, setActiveSetInfo] = useState<ActiveSetInfo | null>(null);
   const [repsForFailedSet, setRepsForFailedSet] = useState<string>("");
   const [isFailModalOpen, setIsFailModalOpen] = useState(false);
+  const [isCancelConfirmModalOpen, setIsCancelConfirmModalOpen] = useState(false);
+
+  // Restore active workout state on component mount or if appData.activeWorkoutState changes
+  useEffect(() => {
+    const persistedActiveState = getActiveWorkoutState();
+    if (persistedActiveState) {
+      setWorkoutMode(persistedActiveState.mode); // Can be 'active' or 'paused'
+      setCurrentWorkoutSession(persistedActiveState.session);
+      setActiveSetInfo(persistedActiveState.activeSetInfo);
+      // Timer state is now part of SetDetails within currentWorkoutSession
+    }
+  }, [getActiveWorkoutState]);
+
 
   const updateSetupScreenData = useCallback((definitionName: string, currentDefinitions: WorkoutDefinition[]) => {
     const definition = currentDefinitions.find(def => def.name === definitionName);
     if (definition) {
       setSelectedWorkoutDef(definition);
-      setLastSpecificSessionDisplay(getLastWorkoutSession(definition.name) || null); // For display of last *specific* A/B
+      setLastSpecificSessionDisplay(getLastWorkoutSession(definition.name) || null); 
       
       let runningPlateConfig: PlateCombination | undefined = undefined;
       const proposedLogs: ExerciseLog[] = definition.exercises.map(exDef => {
@@ -65,35 +84,39 @@ const WorkoutTrackerPage: React.FC = () => {
   }, [getLastWorkoutSession, getProposedWorksetWeight, generateSetsForExercise]);
 
   useEffect(() => {
+    // Only run setup logic if no active/paused workout is restored
+    const persistedActiveState = getActiveWorkoutState();
+    if (persistedActiveState) return;
+
+
     const definitions = getAvailableWorkoutDefinitions();
     setAvailableWorkouts(definitions);
 
     if (definitions.length > 0 && workoutMode === 'setup') {
-        const allSessions = getAllWorkoutSessions(); // Chronologically sorted, newest first
-        const mostRecentGlobalSession = allSessions[0]; // The very last workout done
-        let defaultWorkoutName = definitions[0].name; // Fallback
+        const allSessions = getAllWorkoutSessions(); 
+        const mostRecentGlobalSession = allSessions[0]; 
+        let defaultWorkoutName = definitions[0].name; 
 
         if (mostRecentGlobalSession && APP_WORKOUT_DEFINITIONS.length >= 2) {
             const workoutADef = definitions.find(d => d.name === APP_WORKOUT_DEFINITIONS[0]?.name);
             const workoutBDef = definitions.find(d => d.name === APP_WORKOUT_DEFINITIONS[1]?.name);
 
             if (mostRecentGlobalSession.workoutDefinitionName === APP_WORKOUT_DEFINITIONS[0]?.name && workoutBDef) {
-                defaultWorkoutName = APP_WORKOUT_DEFINITIONS[1].name; // If A was last, suggest B
+                defaultWorkoutName = APP_WORKOUT_DEFINITIONS[1].name; 
             } else if (mostRecentGlobalSession.workoutDefinitionName === APP_WORKOUT_DEFINITIONS[1]?.name && workoutADef) {
-                defaultWorkoutName = APP_WORKOUT_DEFINITIONS[0].name; // If B was last, suggest A
-            } else if (workoutADef){ // If last workout was neither A nor B (or definitions changed), default to A if available
+                defaultWorkoutName = APP_WORKOUT_DEFINITIONS[0].name; 
+            } else if (workoutADef){ 
                 defaultWorkoutName = APP_WORKOUT_DEFINITIONS[0].name;
-            } else if (workoutBDef) { // Or B if A not available
+            } else if (workoutBDef) { 
                  defaultWorkoutName = APP_WORKOUT_DEFINITIONS[1].name;
             }
-            // If neither A nor B are in current definitions, the initial fallback (definitions[0].name) is used.
         }
         updateSetupScreenData(defaultWorkoutName, definitions);
     } else if (definitions.length === 0) {
         updateSetupScreenData("", []);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getAvailableWorkoutDefinitions, workoutMode]); // Rerun when definitions load or mode changes to setup
+  }, [getAvailableWorkoutDefinitions, workoutMode, getActiveWorkoutState]);
 
 
   const handleAdjustWorksetWeight = (exerciseIndex: number, adjustmentType: 'increment' | 'decrement' | 'add10' | 'subtract10') => {
@@ -139,7 +162,7 @@ const WorkoutTrackerPage: React.FC = () => {
     });
   };
 
-  const startWorkout = () => {
+  const handleStartWorkout = () => {
     if (!selectedWorkoutDef || editableExerciseLogs.length === 0) return;
 
     const newSession: WorkoutSession = {
@@ -147,15 +170,19 @@ const WorkoutTrackerPage: React.FC = () => {
       date: new Date().toISOString(),
       workoutDefinitionName: selectedWorkoutDef.name,
       exercises: JSON.parse(JSON.stringify(editableExerciseLogs)), 
+      isPaused: false,
     };
-    setCurrentWorkoutSession(newSession);
+    setCurrentWorkoutSession(newSession); // Local state
+    
     if (newSession.exercises.length > 0 && newSession.exercises[0].sets.length > 0) {
-        setActiveSetInfo({
+        const firstSetInfo: ActiveSetInfo = {
           exerciseIndex: 0,
           setIndex: 0,
           currentLift: newSession.exercises[0].lift,
           currentSet: newSession.exercises[0].sets[0],
-        });
+        };
+        setActiveSetInfo(firstSetInfo); // Local state
+        startActiveWorkout(newSession, firstSetInfo); // Persist to AppData
         setWorkoutMode('active');
     } else {
         setWorkoutMode('completed'); 
@@ -180,7 +207,7 @@ const WorkoutTrackerPage: React.FC = () => {
     const updatedSession = { ...currentWorkoutSession };
     updatedSession.exercises = updatedSession.exercises.map(ex => ({
         ...ex,
-        sets: ex.sets.map(s => ({...s})) // Deep copy sets
+        sets: ex.sets.map(s => ({...s, timerState: s.timerState ? {...s.timerState} : undefined })) 
     }));
 
     const exLog = updatedSession.exercises[activeSetInfo.exerciseIndex];
@@ -192,10 +219,12 @@ const WorkoutTrackerPage: React.FC = () => {
     } else if (status === 'completed') {
         setLog.completedReps = setLog.targetReps;
     }
+    // Clear timer state for completed set
+    delete setLog.timerState;
 
-    setCurrentWorkoutSession(updatedSession); // This will trigger progress bar updates
 
-    // Advance to next set or complete workout
+    setCurrentWorkoutSession(updatedSession); 
+
     let nextExerciseIndex = activeSetInfo.exerciseIndex;
     let nextSetIndex = activeSetInfo.setIndex + 1;
 
@@ -206,34 +235,36 @@ const WorkoutTrackerPage: React.FC = () => {
 
     if (nextExerciseIndex >= updatedSession.exercises.length) { 
       setWorkoutMode('completed');
-      addWorkoutSession(updatedSession);
-      // updateSetupScreenData will be called by useEffect due to workoutMode change
+      addWorkoutSession(updatedSession); // This also clears activeWorkoutState from AppData
+      setActiveSetInfo(null); // Clear local activeSetInfo
     } else {
-      setActiveSetInfo({
+      const newActiveSetInfo: ActiveSetInfo = {
         exerciseIndex: nextExerciseIndex,
         setIndex: nextSetIndex,
         currentLift: updatedSession.exercises[nextExerciseIndex].lift,
         currentSet: updatedSession.exercises[nextExerciseIndex].sets[nextSetIndex],
-      });
+      };
+      setActiveSetInfo(newActiveSetInfo);
+      updateActiveWorkoutProgress(updatedSession, newActiveSetInfo); // Persist progress
     }
   };
 
   const handleGoBackToPreviousSet = () => {
     if (!currentWorkoutSession || !activeSetInfo || (activeSetInfo.exerciseIndex === 0 && activeSetInfo.setIndex === 0)) {
-      return; // Cannot go back from the very first set
+      return; 
     }
 
     const updatedSession = { ...currentWorkoutSession };
      updatedSession.exercises = updatedSession.exercises.map(ex => ({
         ...ex,
-        sets: ex.sets.map(s => ({...s}))
+        sets: ex.sets.map(s => ({...s, timerState: s.timerState ? {...s.timerState} : undefined}))
     }));
 
-    // Reset current (soon to be next) set's status before moving back
     const currentExLog = updatedSession.exercises[activeSetInfo.exerciseIndex];
     const currentSetLogToReset = currentExLog.sets[activeSetInfo.setIndex];
     currentSetLogToReset.status = 'pending';
     delete currentSetLogToReset.completedReps;
+    delete currentSetLogToReset.timerState;
 
 
     let prevExerciseIndex = activeSetInfo.exerciseIndex;
@@ -241,24 +272,25 @@ const WorkoutTrackerPage: React.FC = () => {
 
     if (prevSetIndex < 0) {
       prevExerciseIndex--;
-      // This assumes all exercises have at least one set.
       prevSetIndex = updatedSession.exercises[prevExerciseIndex].sets.length - 1; 
     }
     
-    // Also reset the status of the set we are going back TO
     const targetExLog = updatedSession.exercises[prevExerciseIndex];
     const targetSetLog = targetExLog.sets[prevSetIndex];
     targetSetLog.status = 'pending';
     delete targetSetLog.completedReps;
+    delete targetSetLog.timerState;
 
 
     setCurrentWorkoutSession(updatedSession);
-    setActiveSetInfo({
+    const newActiveSetInfo: ActiveSetInfo = {
       exerciseIndex: prevExerciseIndex,
       setIndex: prevSetIndex,
       currentLift: updatedSession.exercises[prevExerciseIndex].lift,
       currentSet: targetSetLog,
-    });
+    };
+    setActiveSetInfo(newActiveSetInfo);
+    updateActiveWorkoutProgress(updatedSession, newActiveSetInfo); // Persist
   };
   
   const openFailModal = () => {
@@ -268,16 +300,39 @@ const WorkoutTrackerPage: React.FC = () => {
     }
   };
 
-  if (workoutMode === 'setup' && (!selectedWorkoutDef && availableWorkouts.length > 0)) { 
+  const handleCancelWorkout = () => {
+    setIsCancelConfirmModalOpen(true);
+  };
+
+  const confirmCancelWorkout = () => {
+    appDataCancelActiveWorkout(); // Clear from AppData
+    setCurrentWorkoutSession(null);
+    setActiveSetInfo(null);
+    setWorkoutMode('setup'); // This will trigger useEffect to reload setup
+    setIsCancelConfirmModalOpen(false);
+    // Optionally, force re-fetch/re-calc of setup data if useEffect doesn't cover it
+    const definitions = getAvailableWorkoutDefinitions();
+    if (definitions.length > 0) {
+        updateSetupScreenData(selectedWorkoutDef?.name || definitions[0].name, definitions);
+    }
+  };
+
+  const handleTimerUpdate = useCallback((timeLeft: number, isRunning: boolean) => {
+    if (activeSetInfo && currentWorkoutSession) {
+        updateActiveSetTimerState(activeSetInfo.exerciseIndex, activeSetInfo.setIndex, { timeLeft, isRunning });
+    }
+  }, [activeSetInfo, currentWorkoutSession, updateActiveSetTimerState]);
+
+  if (workoutMode === 'setup' && (!selectedWorkoutDef && availableWorkouts.length > 0) && !getActiveWorkoutState()) { 
     return <div className="p-4"><LoadingSpinner message="Loading workout definitions..." /></div>;
   }
-  if (availableWorkouts.length === 0 && workoutMode === 'setup') { 
+  if (availableWorkouts.length === 0 && workoutMode === 'setup' && !getActiveWorkoutState()) { 
     return <div className="p-4 text-center text-textSecondary">No workout definitions found. Configure them in workoutTracker.constants.ts.</div>;
   }
 
 
   return (
-    <div className="p-4 space-y-6 mb-16"> {/* Added mb-16 for bottom nav */}
+    <div className="p-4 space-y-6 mb-16"> 
       <h1 className="text-2xl font-bold text-textPrimary">Train</h1>
 
       {workoutMode === 'setup' && selectedWorkoutDef && (
@@ -331,19 +386,24 @@ const WorkoutTrackerPage: React.FC = () => {
               )}
             </div>
           ))}
-          <Button onClick={startWorkout} size="lg" className="w-full">
+          <Button onClick={handleStartWorkout} size="lg" className="w-full">
             Start Workout
           </Button>
         </div>
       )}
 
-      {workoutMode === 'active' && currentWorkoutSession && activeSetInfo && (
+      {(workoutMode === 'active' || workoutMode === 'paused') && currentWorkoutSession && activeSetInfo && (
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-textPrimary">
-            {currentWorkoutSession.workoutDefinitionName} - In Progress
-          </h2>
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold text-textPrimary">
+                {currentWorkoutSession.workoutDefinitionName} - In Progress
+            </h2>
+            <Button onClick={handleCancelWorkout} variant="danger" size="sm" leftIcon={<XMarkIcon className="w-4 h-4" />}>
+                Cancel
+            </Button>
+          </div>
+          
 
-          {/* Overall Progress Bars (can be kept or removed based on preference) */}
           <div className="bg-card p-3 rounded-lg shadow space-y-2">
             <h3 className="text-md font-semibold text-textPrimary mb-1">Overall Workout Progress:</h3>
             {currentWorkoutSession.exercises.map(exLog => (
@@ -351,7 +411,6 @@ const WorkoutTrackerPage: React.FC = () => {
             ))}
           </div>
           
-          {/* Main Active Set Info */}
           <div className="bg-card p-4 rounded-lg shadow text-center">
             <h3 className="text-2xl font-bold text-primary">{activeSetInfo.currentLift}</h3>
             <p className="text-lg text-textPrimary">
@@ -363,7 +422,6 @@ const WorkoutTrackerPage: React.FC = () => {
               {activeSetInfo.currentSet.actualWeight} kg x {activeSetInfo.currentSet.targetReps} reps
             </p>
 
-            {/* Performed/Upcoming Sets Display for Current Exercise */}
             <ActiveWorkoutSetsDisplay 
                 currentExerciseLog={currentWorkoutSession.exercises[activeSetInfo.exerciseIndex]}
                 activeSetId={activeSetInfo.currentSet.id}
@@ -371,9 +429,11 @@ const WorkoutTrackerPage: React.FC = () => {
             />
             
             <SetTimer 
-              key={activeSetInfo.currentSet.id} // React key for re-mounting
-              setKey={activeSetInfo.currentSet.id} // Prop for internal logic
+              key={activeSetInfo.currentSet.id} 
+              setKey={activeSetInfo.currentSet.id} 
               defaultDurationSeconds={activeSetInfo.currentSet.type === 'warmup' ? (exerciseSettings[activeSetInfo.currentLift]?.defaultTimerWarmup || DEFAULT_TIMER_WARMUP_SECONDS) : (exerciseSettings[activeSetInfo.currentLift]?.defaultTimerWorkset || DEFAULT_TIMER_WORKSET_SECONDS)}
+              initialTimerState={activeSetInfo.currentSet.timerState}
+              onTimerUpdate={handleTimerUpdate}
             />
             
             <div className="bg-background dark:bg-gray-700 p-2 rounded mb-4">
@@ -426,15 +486,30 @@ const WorkoutTrackerPage: React.FC = () => {
           </div>
       </Modal>
 
+       <ConfirmationModal
+        isOpen={isCancelConfirmModalOpen}
+        onClose={() => setIsCancelConfirmModalOpen(false)}
+        onConfirm={confirmCancelWorkout}
+        title="Cancel Workout"
+        message="Are you sure you want to cancel this workout? All progress for this session will be lost."
+        confirmText="Yes, Cancel Workout"
+        confirmButtonVariant="danger"
+      />
+
       {workoutMode === 'completed' && currentWorkoutSession && (
         <div className="bg-card p-4 rounded-lg shadow text-center space-y-3">
           <CheckCircleIcon className="w-16 h-16 text-green-500 mx-auto"/>
           <h2 className="text-2xl font-bold text-textPrimary">Workout Completed!</h2>
           <p className="text-textSecondary">{currentWorkoutSession.workoutDefinitionName} on {new Date(currentWorkoutSession.date).toLocaleDateString()}</p>
           <Button onClick={() => {
-            setWorkoutMode('setup'); // This will trigger useEffect to reload setup data
-            setCurrentWorkoutSession(null);
-            setActiveSetInfo(null);
+            setWorkoutMode('setup'); 
+            setCurrentWorkoutSession(null); // Clear local session
+            setActiveSetInfo(null); // Clear local active set
+            // No need to call appDataCancelActiveWorkout() here as addWorkoutSession already clears it
+            const definitions = getAvailableWorkoutDefinitions();
+            if (definitions.length > 0) {
+                updateSetupScreenData(selectedWorkoutDef?.name || definitions[0].name, definitions);
+            }
           }}>
             Start New Workout Setup
           </Button>

@@ -1,11 +1,12 @@
+
 import React from 'react';
 import { PianoKey } from '../../../types';
 import {
   WHITE_KEY_WIDTH, WHITE_KEY_HEIGHT, BLACK_KEY_WIDTH, BLACK_KEY_HEIGHT,
   KEY_COLOR_WHITE, KEY_COLOR_BLACK, KEY_COLOR_PRESSED_WHITE, KEY_COLOR_PRESSED_BLACK,
   KEY_TEXT_COLOR_WHITE_KEY, KEY_STROKE_COLOR,
-  generatePianoKeys, DEFAULT_PIANO_START_OCTAVE, DEFAULT_PIANO_NUM_OCTAVES, ALL_NOTE_NAMES,
-  KEY_COLOR_HIGHLIGHT_NEXT_CHORD_WHITE, KEY_COLOR_HIGHLIGHT_NEXT_CHORD_BLACK
+  generatePianoKeys, DEFAULT_PIANO_START_OCTAVE, DEFAULT_PIANO_NUM_OCTAVES,
+  KEY_COLOR_HIGHLIGHT_NEXT_CHORD_WHITE, KEY_COLOR_HIGHLIGHT_NEXT_CHORD_BLACK // Keep these for potential direct use, though logic simplifies
 } from '../pianoHelper.constants';
 import { getNoteMidiValue, getNoteFromMidiValue, MIDI_NOTE_NAMES_SHARP, calculateRequiredOctavesAndStartForVoicing } from '../pianoHelper.utils';
 import Button from '../../../components/common/Button';
@@ -17,8 +18,8 @@ interface PianoChordVisualizerProps {
   currentVoicingIndex: number;
   onVoicingChange: (newIndex: number) => void;
   numOctavesToDisplay?: number;
-  nextChordNotes?: string[]; // Notes of the next chord in a progression
-  fixedStartOctave?: number; // If provided, forces the keyboard to start at this octave
+  fixedStartOctave?: number;
+  noteDotColors?: Record<string, 'red' | 'black'>; // Explicit dot colors
 }
 
 const PianoChordVisualizer: React.FC<PianoChordVisualizerProps> = ({
@@ -27,8 +28,8 @@ const PianoChordVisualizer: React.FC<PianoChordVisualizerProps> = ({
   currentVoicingIndex,
   onVoicingChange,
   numOctavesToDisplay = DEFAULT_PIANO_NUM_OCTAVES,
-  nextChordNotes,
-  fixedStartOctave, 
+  fixedStartOctave,
+  noteDotColors,
 }) => {
   const currentNotesInChord = allVoicings[currentVoicingIndex] || [];
 
@@ -39,41 +40,53 @@ const PianoChordVisualizer: React.FC<PianoChordVisualizerProps> = ({
     return calculateRequiredOctavesAndStartForVoicing(currentNotesInChord, numOctavesToDisplay);
   }, [currentNotesInChord, numOctavesToDisplay, fixedStartOctave]);
 
-
-  const pianoKeys = React.useMemo(() => 
-    generatePianoKeys(actualStartOctave, actualNumOctaves), 
+  const pianoKeys = React.useMemo(() =>
+    generatePianoKeys(actualStartOctave, actualNumOctaves),
     [actualStartOctave, actualNumOctaves]
   );
 
   const getDisplayableNoteFullName = (noteNameWithOctave: string): string => {
     const match = noteNameWithOctave.match(/([A-Ga-g][#b]?)([0-9])/);
-    if (!match) return noteNameWithOctave; 
+    if (!match) return noteNameWithOctave;
 
     let notePart = match[1];
     const octaveNum = parseInt(match[2], 10);
-    
-    const equivalentSharp: {[key:string]:string} = {
-        'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#'
+
+    const equivalentSharp: { [key: string]: string } = {
+      'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#'
     };
     if (equivalentSharp[notePart]) {
-        notePart = equivalentSharp[notePart];
+      notePart = equivalentSharp[notePart];
     }
-
-    // No re-mapping to display octave here, use actual note octave for accuracy with fixed range
     return `${notePart}${octaveNum}`;
   };
 
   const displayableNotesInCurrentChord = currentNotesInChord.map(getDisplayableNoteFullName);
-  const displayableNotesInNextChord = nextChordNotes?.map(getDisplayableNoteFullName) || [];
-
 
   const totalWhiteKeys = pianoKeys.filter(k => k.type === 'white').length;
   const svgWidth = totalWhiteKeys * WHITE_KEY_WIDTH;
   const svgHeight = WHITE_KEY_HEIGHT;
-  
-  const viewingOctaveEnd = actualStartOctave + actualNumOctaves - 1;
-  const viewingRangeStr = `${MIDI_NOTE_NAMES_SHARP[0]}${actualStartOctave} - ${MIDI_NOTE_NAMES_SHARP[MIDI_NOTE_NAMES_SHARP.length-1]}${viewingOctaveEnd}`;
 
+  const viewingOctaveEnd = actualStartOctave + actualNumOctaves - 1;
+  const viewingRangeStr = `${MIDI_NOTE_NAMES_SHARP[0]}${actualStartOctave} - ${MIDI_NOTE_NAMES_SHARP[MIDI_NOTE_NAMES_SHARP.length - 1]}${viewingOctaveEnd}`;
+
+  const drawDot = (keyFullName: string, keyType: 'white' | 'black', keyX: number, keyY: number, keyWidth: number, keyHeight: number) => {
+    const dotColor = noteDotColors?.[keyFullName] || 'black'; // Default to black if not specified
+    const radius = keyType === 'white' ? 3 : 2.5;
+    let cx = keyX + keyWidth / 2;
+    let cy = keyType === 'white' ? keyY + keyHeight - radius - 8 : keyY + keyHeight * 0.66;
+
+    return (
+      <circle
+        cx={cx}
+        cy={cy}
+        r={radius}
+        fill={dotColor === 'red' ? 'red' : 'black'}
+        stroke="white"
+        strokeWidth="0.5"
+      />
+    );
+  };
 
   return (
     <div className="my-1 p-1 bg-background dark:bg-gray-700 rounded-md shadow">
@@ -81,34 +94,34 @@ const PianoChordVisualizer: React.FC<PianoChordVisualizerProps> = ({
         <h4 className="text-md font-semibold text-textPrimary">{chordName}</h4>
         {allVoicings.length > 1 && (
           <div className="flex items-center space-x-1">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => onVoicingChange( (currentVoicingIndex - 1 + allVoicings.length) % allVoicings.length )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onVoicingChange((currentVoicingIndex - 1 + allVoicings.length) % allVoicings.length)}
               aria-label="Previous voicing"
-              disabled={allVoicings.length <=1}
+              disabled={allVoicings.length <= 1}
             >
-              <ChevronLeftIcon className="w-4 h-4"/>
+              <ChevronLeftIcon className="w-4 h-4" />
             </Button>
-            <span className="text-xs text-textSecondarytabular-nums">
+            <span className="text-xs text-textSecondary tabular-nums">
               {currentVoicingIndex + 1}/{allVoicings.length}
             </span>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => onVoicingChange( (currentVoicingIndex + 1) % allVoicings.length )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onVoicingChange((currentVoicingIndex + 1) % allVoicings.length)}
               aria-label="Next voicing"
-              disabled={allVoicings.length <=1}
+              disabled={allVoicings.length <= 1}
             >
-              <ChevronRightIcon className="w-4 h-4"/>
+              <ChevronRightIcon className="w-4 h-4" />
             </Button>
           </div>
         )}
       </div>
       <div className="overflow-x-auto pb-1">
-        <svg 
-          width={svgWidth} 
-          height={svgHeight + 20} 
+        <svg
+          width={svgWidth}
+          height={svgHeight + 20}
           viewBox={`0 0 ${svgWidth} ${svgHeight + 20}`}
           aria-label={`Piano keyboard showing notes for ${chordName}`}
           role="img"
@@ -117,44 +130,49 @@ const PianoChordVisualizer: React.FC<PianoChordVisualizerProps> = ({
           <g>
             {pianoKeys.filter(key => key.type === 'white').map(key => {
               const isPressed = displayableNotesInCurrentChord.includes(key.fullName);
-              const isInNextChord = isPressed && displayableNotesInNextChord.includes(key.fullName);
-              let fillColor = KEY_COLOR_WHITE;
+              // Original key color logic (pressed/not pressed)
+              let keyFillColor = KEY_COLOR_WHITE;
               if (isPressed) {
-                fillColor = isInNextChord ? KEY_COLOR_HIGHLIGHT_NEXT_CHORD_WHITE : KEY_COLOR_PRESSED_WHITE;
+                // The PianoChordVisualizer doesn't use KEY_COLOR_HIGHLIGHT_NEXT_CHORD_WHITE directly for fill anymore,
+                // dot color determines the 'highlight'. Base fill is just 'pressed'.
+                keyFillColor = KEY_COLOR_PRESSED_WHITE;
               }
               return (
-                <rect
-                  key={key.fullName}
-                  x={key.x}
-                  y={key.y}
-                  width={key.width}
-                  height={key.height}
-                  fill={fillColor}
-                  stroke={KEY_STROKE_COLOR}
-                  strokeWidth="1"
-                  aria-label={`${key.fullName} ${isPressed ? 'pressed' : ''} ${isInNextChord ? 'also in next chord' : ''}`}
-                />
+                <React.Fragment key={key.fullName}>
+                  <rect
+                    x={key.x}
+                    y={key.y}
+                    width={key.width}
+                    height={key.height}
+                    fill={keyFillColor}
+                    stroke={KEY_STROKE_COLOR}
+                    strokeWidth="1"
+                    aria-label={`${key.fullName} ${isPressed ? 'pressed' : ''}`}
+                  />
+                  {isPressed && drawDot(key.fullName, 'white', key.x, key.y, key.width, key.height)}
+                </React.Fragment>
               );
             })}
             {pianoKeys.filter(key => key.type === 'black').map(key => {
               const isPressed = displayableNotesInCurrentChord.includes(key.fullName);
-              const isInNextChord = isPressed && displayableNotesInNextChord.includes(key.fullName);
-              let fillColor = KEY_COLOR_BLACK;
+              let keyFillColor = KEY_COLOR_BLACK;
               if (isPressed) {
-                fillColor = isInNextChord ? KEY_COLOR_HIGHLIGHT_NEXT_CHORD_BLACK : KEY_COLOR_PRESSED_BLACK;
+                keyFillColor = KEY_COLOR_PRESSED_BLACK;
               }
               return (
-                <rect
-                  key={key.fullName}
-                  x={key.x}
-                  y={key.y}
-                  width={key.width}
-                  height={key.height}
-                  fill={fillColor}
-                  stroke={KEY_STROKE_COLOR}
-                  strokeWidth="1"
-                  aria-label={`${key.fullName} ${isPressed ? 'pressed' : ''} ${isInNextChord ? 'also in next chord' : ''}`}
-                />
+                <React.Fragment key={key.fullName}>
+                  <rect
+                    x={key.x}
+                    y={key.y}
+                    width={key.width}
+                    height={key.height}
+                    fill={keyFillColor}
+                    stroke={KEY_STROKE_COLOR}
+                    strokeWidth="1"
+                    aria-label={`${key.fullName} ${isPressed ? 'pressed' : ''}`}
+                  />
+                  {isPressed && drawDot(key.fullName, 'black', key.x, key.y, key.width, key.height)}
+                </React.Fragment>
               );
             })}
             {pianoKeys.filter(key => key.type === 'white').map(key => (
@@ -174,8 +192,8 @@ const PianoChordVisualizer: React.FC<PianoChordVisualizerProps> = ({
           </g>
         </svg>
       </div>
-       <p className="text-xs text-textSecondary mt-1">Notes: {currentNotesInChord.join(', ')}</p>
-       <p className="text-xs text-textSecondary mt-0.5">Viewing: {viewingRangeStr}</p>
+      <p className="text-xs text-textSecondary mt-1">Notes: {currentNotesInChord.join(', ')}</p>
+      <p className="text-xs text-textSecondary mt-0.5">Viewing: {viewingRangeStr}</p>
     </div>
   );
 };

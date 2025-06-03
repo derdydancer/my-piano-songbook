@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { PlateCombination, PlateCombinationItem } from '../../../types';
 import { getPlateVisualStyle, BAR_VISUAL_COLOR, BAR_SLEEVE_COLOR, BAR_TEXT_COLOR, BAR_TEXT_COLOR_DARK_BG } from '../workoutTracker.constants';
@@ -9,7 +8,7 @@ interface BarbellVisualizerProps {
 }
 
 const BarbellVisualizer: React.FC<BarbellVisualizerProps> = ({ plateCombination, barWeight }) => {
-  const SVG_VIEWBOX_WIDTH = 300; // Keep internal logic based on fixed viewBox
+  const SVG_VIEWBOX_WIDTH = 300; 
   const SVG_HEIGHT = 120; 
   const BAR_Y_CENTER = SVG_HEIGHT / 2;
   const BAR_THICKNESS = 10; 
@@ -87,24 +86,18 @@ const BarbellVisualizer: React.FC<BarbellVisualizerProps> = ({ plateCombination,
   );
 
 
-  if (!plateCombination || plateCombination.length === 0) {
-    return (
-      <div className="text-center py-2 w-full flex flex-col items-center">
-        <svg width="90%" height={SVG_HEIGHT} viewBox={`0 0 ${SVG_VIEWBOX_WIDTH} ${SVG_HEIGHT}`} aria-label={`Empty ${barWeight}kg bar`}>
-          {commonBarElements}
-        </svg>
-        <p className="text-sm text-textPrimary font-semibold mt-1">Empty Bar ({barWeight}kg)</p>
-      </div>
-    );
-  }
-
+  // The text "Empty Bar (20kg)" is removed from here.
+  // The parent component can display this info if needed.
   return (
     <div className="text-center py-2 w-full flex flex-col items-center">
-      <svg width="90%" height={SVG_HEIGHT} viewBox={`0 0 ${SVG_VIEWBOX_WIDTH} ${SVG_HEIGHT}`} aria-label={`Barbell loaded with plates.`}>
+      <svg width="90%" height={SVG_HEIGHT} viewBox={`0 0 ${SVG_VIEWBOX_WIDTH} ${SVG_HEIGHT}`} aria-label={!plateCombination || plateCombination.length === 0 ? `Empty ${barWeight}kg bar` : `Barbell loaded with plates.`}>
         {commonBarElements}
-        {/* Plates */}
-        {renderPlates('left', plateCombination)}
-        {renderPlates('right', plateCombination)}
+        {plateCombination && plateCombination.length > 0 && (
+          <>
+            {renderPlates('left', plateCombination)}
+            {renderPlates('right', plateCombination)}
+          </>
+        )}
       </svg>
     </div>
   );

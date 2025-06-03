@@ -1,4 +1,3 @@
-
 import { LiftType, WorkoutDefinition, PlateVisualStyle } from '../../types';
 
 export const BAR_WEIGHT = 20; // in kg
@@ -30,18 +29,21 @@ export const WORKOUT_DEFINITIONS: WorkoutDefinition[] = [
 export const SMALLEST_BAR_INCREMENT = 1;
 
 // For BarbellVisualizer.tsx
+// Adjusted thickness for more uniformity and text legibility.
+// All plates will now have a thickness of at least 20.
+const MIN_PLATE_THICKNESS = 20;
 export const PLATE_VISUAL_STYLES: Record<number, PlateVisualStyle> = {
-  25:    { color: '#FF0000', height: 100, thickness: 40 }, // Red
-  20:    { color: '#0000FF', height: 95,  thickness: 36 }, // Blue
-  15:    { color: '#FFFF00', height: 90,  thickness: 32 }, // Yellow
-  10:    { color: '#008000', height: 85,  thickness: 28 }, // Green
-  5:     { color: '#FFFFFF', height: 80,  thickness: 24 }, // White (stroke will be needed)
-  2.5:   { color: '#333333', height: 75,  thickness: 20 }, // Black/Dark Grey
-  1.25:  { color: '#808080', height: 70,  thickness: 16 },  // Grey
-  0.5:   { color: '#A9A9A9', height: 65,  thickness: 12 },  // Darker Grey / Silver
+  25:    { color: '#FF0000', height: 100, thickness: Math.max(MIN_PLATE_THICKNESS, 40) }, // Red
+  20:    { color: '#0000FF', height: 95,  thickness: Math.max(MIN_PLATE_THICKNESS, 36) }, // Blue
+  15:    { color: '#FFFF00', height: 90,  thickness: Math.max(MIN_PLATE_THICKNESS, 32) }, // Yellow
+  10:    { color: '#008000', height: 85,  thickness: Math.max(MIN_PLATE_THICKNESS, 28) }, // Green
+  5:     { color: '#FFFFFF', height: 80,  thickness: Math.max(MIN_PLATE_THICKNESS, 24) }, // White (stroke will be needed)
+  2.5:   { color: '#333333', height: 75,  thickness: MIN_PLATE_THICKNESS }, // Black/Dark Grey
+  1.25:  { color: '#808080', height: 70,  thickness: MIN_PLATE_THICKNESS },  // Grey
+  0.5:   { color: '#A9A9A9', height: 65,  thickness: MIN_PLATE_THICKNESS },  // Darker Grey / Silver
 };
 
-export const DEFAULT_PLATE_VISUAL_STYLE: PlateVisualStyle = { color: '#CCCCCC', height: 60, thickness: 10 };
+export const DEFAULT_PLATE_VISUAL_STYLE: PlateVisualStyle = { color: '#CCCCCC', height: 60, thickness: MIN_PLATE_THICKNESS };
 
 export const getPlateVisualStyle = (denomination: number): PlateVisualStyle => {
   return PLATE_VISUAL_STYLES[denomination] || DEFAULT_PLATE_VISUAL_STYLE;

@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Button from '../../../components/common/Button';
-import { PlayIcon, PauseIcon, RefreshCwIcon } from '../../../components/common/Icons'; // Assuming these exist or can be added
+import { PlayIcon, PauseIcon, RefreshCwIcon } from '../../../components/common/Icons'; 
 
 interface SetTimerProps {
-  setKey: string; // Used to reset timer when set changes
+  setKey: string; 
   defaultDurationSeconds: number;
+  initialTimerState?: { timeLeft: number; isRunning: boolean };
+  onTimerUpdate?: (timeLeft: number, isRunning: boolean) => void;
 }
 
 const formatTime = (totalSeconds: number): string => {
@@ -13,9 +15,9 @@ const formatTime = (totalSeconds: number): string => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 };
 
-const SetTimer: React.FC<SetTimerProps> = ({ setKey, defaultDurationSeconds }) => {
-  const [timeLeft, setTimeLeft] = useState(defaultDurationSeconds);
-  const [isRunning, setIsRunning] = useState(false);
+const SetTimer: React.FC<SetTimerProps> = ({ setKey, defaultDurationSeconds, initialTimerState, onTimerUpdate }) => {
+  const [timeLeft, setTimeLeft] = useState(initialTimerState?.timeLeft ?? defaultDurationSeconds);
+  const [isRunning, setIsRunning] = useState(initialTimerState?.isRunning ?? false);
   const timerRef = React.useRef<number | null>(null);
 
   const clearTimer = useCallback(() => {
@@ -27,43 +29,65 @@ const SetTimer: React.FC<SetTimerProps> = ({ setKey, defaultDurationSeconds }) =
 
   const resetTimer = useCallback(() => {
     clearTimer();
-    setTimeLeft(defaultDurationSeconds);
-    setIsRunning(false);
-  }, [clearTimer, defaultDurationSeconds]);
+    const newTimeLeft = defaultDurationSeconds;
+    const newIsRunning = false;
+    setTimeLeft(newTimeLeft);
+    setIsRunning(newIsRunning);
+    if (onTimerUpdate) {
+        onTimerUpdate(newTimeLeft, newIsRunning);
+    }
+  }, [clearTimer, defaultDurationSeconds, onTimerUpdate]);
 
   useEffect(() => {
-    // Reset timer when setKey (current set ID) or default duration changes
-    resetTimer();
-  }, [setKey, defaultDurationSeconds, resetTimer]);
+    // Reset timer when setKey (current set ID) changes OR if initial state prop changes (e.g., loaded from persisted)
+    if (initialTimerState) {
+        setTimeLeft(initialTimerState.timeLeft);
+        setIsRunning(initialTimerState.isRunning);
+    } else {
+        resetTimer();
+    }
+  }, [setKey, initialTimerState, resetTimer]);
+
 
   useEffect(() => {
     if (isRunning && timeLeft > 0) {
-      timerRef.current = window.setInterval(() => { // Use window.setInterval for clarity in browser context
+      timerRef.current = window.setInterval(() => {
         setTimeLeft(prevTime => {
-          if (prevTime <= 1) {
+          const newTime = prevTime - 1;
+          if (newTime <= 0) {
             clearTimer();
             setIsRunning(false);
-            // Optionally play a sound or show notification
+            if (onTimerUpdate) onTimerUpdate(0, false);
             return 0;
           }
-          return prevTime - 1;
+          if (onTimerUpdate) onTimerUpdate(newTime, true);
+          return newTime;
         });
       }, 1000);
     } else if (!isRunning || timeLeft === 0) {
       clearTimer();
+      // Ensure final state is propagated if timer stops itself
+      if (timeLeft === 0 && isRunning && onTimerUpdate) onTimerUpdate(0, false);
     }
-    return clearTimer; // Cleanup on unmount or re-run
-  }, [isRunning, timeLeft, clearTimer]);
+    return clearTimer;
+  }, [isRunning, timeLeft, clearTimer, onTimerUpdate]);
 
   const handleTogglePlayPause = () => {
-    if (timeLeft === 0 && !isRunning) { // If timer finished and user hits play, reset it
-      resetTimer();
-      // Consider auto-starting after reset if that's desired UX
-      // setIsRunning(true); 
+    const newIsRunning = !isRunning;
+    if (timeLeft === 0 && !newIsRunning) { // If timer finished and user hits play, reset it
+      const newTimeLeft = defaultDurationSeconds;
+      setTimeLeft(newTimeLeft);
+      setIsRunning(true); // Auto-start after reset
+      if (onTimerUpdate) onTimerUpdate(newTimeLeft, true);
     } else {
-      setIsRunning(prev => !prev);
+      setIsRunning(newIsRunning);
+      if (onTimerUpdate) onTimerUpdate(timeLeft, newIsRunning);
     }
   };
+  
+  const handleResetClick = () => {
+      resetTimer(); // resetTimer already calls onTimerUpdate
+  }
 
   return (
     <div className="flex flex-col items-center space-y-2 my-3 p-3 bg-background dark:bg-gray-700 rounded-md">
@@ -75,7 +99,7 @@ const SetTimer: React.FC<SetTimerProps> = ({ setKey, defaultDurationSeconds }) =
           {isRunning ? <PauseIcon className="w-4 h-4 mr-1" /> : <PlayIcon className="w-4 h-4 mr-1" />}
           {isRunning ? 'Pause' : timeLeft === 0 ? 'Restart' : 'Start'}
         </Button>
-        <Button onClick={resetTimer} size="sm" variant="ghost" disabled={timeLeft === defaultDurationSeconds && !isRunning}>
+        <Button onClick={handleResetClick} size="sm" variant="ghost" disabled={timeLeft === defaultDurationSeconds && !isRunning}>
           <RefreshCwIcon className="w-4 h-4 mr-1" />
           Reset
         </Button>

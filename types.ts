@@ -98,6 +98,10 @@ export interface SetDetails {
   status: 'pending' | 'completed' | 'failed' | 'skipped';
   actualWeight: number; // If rounded from target or determined by findClosestLoadableWeight
   plateConfiguration?: PlateCombination; // How the bar was loaded
+  timerState?: { // Added to persist timer state with the set
+    timeLeft: number;
+    isRunning: boolean;
+  };
 }
 
 export interface PlateCombinationItem {
@@ -119,6 +123,7 @@ export interface WorkoutSession {
   workoutDefinitionName: string; // e.g., "Workout A"
   exercises: ExerciseLog[];
   notes?: string;
+  isPaused?: boolean; // Flag to indicate if the session is paused
 }
 
 export interface WorkoutExerciseDefinition {
@@ -132,7 +137,7 @@ export interface WorkoutDefinition {
   exercises: WorkoutExerciseDefinition[];
 }
 
-export type WorkoutMode = 'setup' | 'active' | 'completed';
+export type WorkoutMode = 'setup' | 'active' | 'completed' | 'paused';
 
 export interface ActiveSetInfo {
   exerciseIndex: number;
@@ -140,6 +145,15 @@ export interface ActiveSetInfo {
   currentLift: LiftType;
   currentSet: SetDetails;
 }
+
+// For persisting active workout
+export interface ActiveWorkoutState {
+  mode: 'active' | 'paused'; // Indicates if workout is active or paused
+  session: WorkoutSession; // The current in-progress session data
+  activeSetInfo: ActiveSetInfo; // Info about the specific set being performed
+  // Timer state might be better managed within SetDetails or locally in SetTimer if reset on set change
+}
+
 
 // --- Piano Chord Helper & Songbook Types ---
 
@@ -230,6 +244,7 @@ export interface AppData {
   plateInventory: Plate[];
   exerciseSettings: ExerciseSettings;
   workoutSessions: WorkoutSession[];
+  activeWorkoutState?: ActiveWorkoutState | null; // Added for persisting active workout
   // Piano Helper & Songbook Data
   savedPianoSongs: SavedPianoSong[];
   // Bar Loader Tester specific data (if any becomes persistent)

@@ -1,4 +1,5 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useAppData } from '../../contexts/AppDataContext';
 import { PianoAnalysisResult, SavedPianoSong, UniqueChordDefinition as AIUniqueChordDefinition, SavedUniqueChordDefinition, ChordProgressionItem } from '../../types';
 import Button from '../../components/common/Button';
@@ -8,25 +9,35 @@ import LoadingSpinner from '../../components/LoadingSpinner';
 import AlertModal from '../../components/common/AlertModal';
 import { geminiService } from '../../services/geminiService';
 import PianoChordVisualizer from './components/PianoChordVisualizer';
-import SongGridView, { SongGridChord } from './components/SongGridView'; // Import new components
-import { generateChordVoicings } from './pianoHelper.utils';
+import SongGridView from './components/SongGridView';
+import { generateChordVoicings, normalizeNoteToSharp } from './pianoHelper.utils';
 
 interface DisplayableChordInfo {
   chordName: string;
-  aiSuggestedNotes: string[]; 
-  allPossibleVoicings: string[][]; 
+  aiSuggestedNotes: string[];
+  allPossibleVoicings: string[][];
   currentVoicingIndex: number;
 }
+
+// For SongGridView in PianoHelperPage, this will be the expected structure for its `chords` prop
+// (matching DisplayableSongChordInfo used in SongbookPage)
+interface DisplayableUnsavedSongChordInfo {
+    chordName: string;
+    allPossibleVoicings: string[][];
+    currentVoicingIndex: number;
+    // aiSuggestedNotes is not directly needed by SongGridView's props, but kept in DisplayableChordInfo
+}
+
 
 const PianoHelperPage: React.FC = () => {
   const { addSavedPianoSong } = useAppData();
   const [inputText, setInputText] = useState<string>('');
   const [uploadedImage, setUploadedImage] = useState<File | null>(null);
   const [uploadedImagePreview, setUploadedImagePreview] = useState<string | null>(null);
-  
+
   const [rawAnalysisResult, setRawAnalysisResult] = useState<PianoAnalysisResult | null>(null);
   const [displayableChords, setDisplayableChords] = useState<DisplayableChordInfo[]>([]);
-  const [isGridViewActive, setIsGridViewActive] = useState<boolean>(false); // State for grid view
+  const [isGridViewActive, setIsGridViewActive] = useState<boolean>(false);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
@@ -42,7 +53,7 @@ const PianoHelperPage: React.FC = () => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
       setUploadedImage(file);
-      setInputText(''); 
+      setInputText('');
       setRawAnalysisResult(null);
       setDisplayableChords([]);
       setIsGridViewActive(false);
@@ -64,11 +75,11 @@ const PianoHelperPage: React.FC = () => {
     setDisplayableChords([]);
     setIsGridViewActive(false);
   };
-  
+
   const handleTextChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputText(event.target.value);
     if (event.target.value) {
-        setUploadedImage(null); 
+        setUploadedImage(null);
         setUploadedImagePreview(null);
         setRawAnalysisResult(null);
         setDisplayableChords([]);
@@ -112,25 +123,28 @@ const PianoHelperPage: React.FC = () => {
 
   const processAIResults = (result: PianoAnalysisResult | null) => {
     if (result) {
-      setRawAnalysisResult(result); 
+      setRawAnalysisResult(result);
       if (result.uniqueChords && result.uniqueChords.length > 0) {
         const newDisplayableChords = result.uniqueChords.map(aiChord => {
+          const normalizedAISuggestedNotes = aiChord.aiSuggestedNotes.map(normalizeNoteToSharp);
           const allVoicings = generateChordVoicings(aiChord.chordName);
           let initialIndex = 0;
+
           if (allVoicings.length > 0) {
-            const foundIndex = allVoicings.findIndex(voicing => 
-              JSON.stringify(voicing.sort()) === JSON.stringify([...aiChord.aiSuggestedNotes].sort())
+            const foundIndex = allVoicings.findIndex(voicing =>
+              JSON.stringify(voicing.sort()) === JSON.stringify([...normalizedAISuggestedNotes].sort())
             );
             if (foundIndex !== -1) {
               initialIndex = foundIndex;
             }
           } else {
-            allVoicings.push([...aiChord.aiSuggestedNotes]);
+            // If generateChordVoicings returns empty (e.g. unknown chord type), use AI's suggestion
+            allVoicings.push([...normalizedAISuggestedNotes]);
           }
-          
+
           return {
             chordName: aiChord.chordName,
-            aiSuggestedNotes: aiChord.aiSuggestedNotes,
+            aiSuggestedNotes: normalizedAISuggestedNotes,
             allPossibleVoicings: allVoicings,
             currentVoicingIndex: initialIndex,
           };
@@ -145,36 +159,39 @@ const PianoHelperPage: React.FC = () => {
     }
     setIsLoading(false);
   };
-  
+
   const handleVoicingChange = (chordNameToUpdate: string, newIndex: number) => {
-    setDisplayableChords(prevChords => 
-      prevChords.map(chord => 
-        chord.chordName === chordNameToUpdate 
-          ? { ...chord, currentVoicingIndex: newIndex } 
+    setDisplayableChords(prevChords =>
+      prevChords.map(chord =>
+        chord.chordName === chordNameToUpdate
+          ? { ...chord, currentVoicingIndex: newIndex }
           : chord
       )
     );
   };
 
   const handleSaveSong = async () => {
-    if (!rawAnalysisResult) { 
+    if (!rawAnalysisResult) {
       openAlert("Error", "No analysis result to save.");
       return;
     }
     setIsSaving(true);
 
-    const savedUniqueChords: SavedUniqueChordDefinition[] = displayableChords.map(dc => ({
-      chordName: dc.chordName,
-      selectedNotes: dc.allPossibleVoicings[dc.currentVoicingIndex] || dc.aiSuggestedNotes,
-      selectedVoicingIndex: dc.currentVoicingIndex,
-    }));
+    const savedUniqueChords: SavedUniqueChordDefinition[] = displayableChords.map(dc => {
+      const selectedNotesRaw = dc.allPossibleVoicings[dc.currentVoicingIndex] || dc.aiSuggestedNotes;
+      return {
+        chordName: dc.chordName,
+        selectedNotes: selectedNotesRaw.map(normalizeNoteToSharp),
+        selectedVoicingIndex: dc.currentVoicingIndex,
+      };
+    });
 
     const songToSave: Omit<SavedPianoSong, 'id' | 'dateAdded'> = {
       songTitle: rawAnalysisResult.songTitle || "Unknown Song",
       lyricsBy: rawAnalysisResult.lyricsBy,
       musicBy: rawAnalysisResult.musicBy,
       analysisResult: {
-        songTitle: rawAnalysisResult.songTitle, 
+        songTitle: rawAnalysisResult.songTitle,
         lyricsBy: rawAnalysisResult.lyricsBy,
         musicBy: rawAnalysisResult.musicBy,
         uniqueChords: savedUniqueChords,
@@ -188,7 +205,7 @@ const PianoHelperPage: React.FC = () => {
       if (uploadedImagePreview.startsWith('data:')) {
         songToSave.sourceImageBase64 = uploadedImagePreview.split(',')[1];
         songToSave.sourceImageMimeType = uploadedImage.type;
-      } else { 
+      } else {
           const reader = new FileReader();
           reader.onloadend = () => {
               songToSave.sourceImageBase64 = (reader.result as string).split(',')[1];
@@ -198,19 +215,26 @@ const PianoHelperPage: React.FC = () => {
               setIsSaving(false);
           }
           reader.readAsDataURL(uploadedImage);
-          return; 
+          return;
       }
     }
-    
+
     addSavedPianoSong(songToSave);
     openAlert("Song Saved", `"${songToSave.songTitle}" has been added to your Songbook.`);
     setIsSaving(false);
   };
 
-  const songGridData: SongGridChord[] = displayableChords.map(dc => ({
-    chordName: dc.chordName,
-    selectedNotes: dc.allPossibleVoicings[dc.currentVoicingIndex] || dc.aiSuggestedNotes,
-  }));
+  const chordsForGridView: Record<string, DisplayableUnsavedSongChordInfo> = useMemo(() => {
+    const record: Record<string, DisplayableUnsavedSongChordInfo> = {};
+    displayableChords.forEach(chord => {
+        record[chord.chordName] = {
+            chordName: chord.chordName,
+            allPossibleVoicings: chord.allPossibleVoicings,
+            currentVoicingIndex: chord.currentVoicingIndex,
+        };
+    });
+    return record;
+  }, [displayableChords]);
 
   return (
     <div className="p-4 space-y-6 mb-16">
@@ -246,14 +270,14 @@ const PianoHelperPage: React.FC = () => {
             <img src={uploadedImagePreview} alt="Uploaded sheet music preview" className="max-w-full max-h-60 mx-auto rounded border border-gray-300 dark:border-gray-600" />
           </div>
         )}
-        
+
         <div className="flex gap-2 mt-3">
           <Button onClick={handleSubmit} disabled={isLoading || isSaving} className="flex-grow">
             {isLoading ? <LoadingSpinner size="sm" /> : "Generate Chords"}
           </Button>
           <Button onClick={clearInputs} variant="ghost" disabled={isLoading || isSaving}>Clear</Button>
         </div>
-         {geminiService.getApiKeyStatus() !== 'valid' && 
+         {geminiService.getApiKeyStatus() !== 'valid' &&
              <p className="text-xs text-red-500 dark:text-red-400 mt-1">
                 <InformationCircleIcon className="w-3 h-3 inline mr-1"/>
                 Gemini API key is not configured or invalid. AI features may not work. Check Settings.
@@ -285,7 +309,12 @@ const PianoHelperPage: React.FC = () => {
           </div>
 
           {isGridViewActive ? (
-            <SongGridView uniqueChords={songGridData} songTitle={rawAnalysisResult.songTitle} />
+            <SongGridView
+                songId="UNSAVED_SONG_CONTEXT"
+                chords={chordsForGridView}
+                onVoicingChange={(_songId, chordName, newIdx) => handleVoicingChange(chordName, newIdx)}
+                songTitle={rawAnalysisResult?.songTitle}
+            />
           ) : (
             <>
               {displayableChords && displayableChords.length > 0 && (
@@ -293,11 +322,12 @@ const PianoHelperPage: React.FC = () => {
                   <h3 className="text-lg font-semibold text-textPrimary mt-3">Unique Chords (Interactive):</h3>
                   {displayableChords.map((chordInfo) => (
                     <div key={`${chordInfo.chordName}-interactive-display`} className="p-3 bg-background dark:bg-gray-800 rounded-md">
-                      <PianoChordVisualizer 
-                        chordName={chordInfo.chordName} 
+                      <PianoChordVisualizer
+                        chordName={chordInfo.chordName}
                         allVoicings={chordInfo.allPossibleVoicings}
                         currentVoicingIndex={chordInfo.currentVoicingIndex}
                         onVoicingChange={(newIndex) => handleVoicingChange(chordInfo.chordName, newIndex)}
+                        // noteDotColors prop is NOT passed here, so visualizer will default to black dots
                       />
                     </div>
                   ))}
@@ -305,7 +335,7 @@ const PianoHelperPage: React.FC = () => {
               )}
             </>
           )}
-          
+
           {rawAnalysisResult.chordProgression && rawAnalysisResult.chordProgression.length > 0 && (
              <div className="mt-4">
                 <h3 className="text-lg font-semibold text-textPrimary">Chord Progression:</h3>
@@ -329,7 +359,7 @@ const PianoHelperPage: React.FC = () => {
           </Button>
         </div>
       )}
-      
+
       {!rawAnalysisResult && !isLoading && (inputText || uploadedImagePreview) && (
           <p className="text-textSecondary text-center py-4">Click "Generate Chords" to see results.</p>
       )}

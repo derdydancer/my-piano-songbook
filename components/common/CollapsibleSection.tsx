@@ -18,7 +18,7 @@ interface CollapsibleSectionProps {
  * Used by:
  * - Gift Assistant: To collapse/expand individual gift recipient lists and AI suggestion sections.
  * - Settings: To group different settings categories (General, Utility-specific).
- * - Songbook: To expand/collapse individual songs.
+ * - Songbook: To expand/collapse individual songs. (Prior to single-song view refactor)
  */
 const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children, initialOpen = false, headerContent, onToggle }) => {
   const [isOpen, setIsOpen] = useState(initialOpen);
@@ -45,7 +45,7 @@ const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({ title, children
         <h2 className="text-xl font-semibold text-textPrimary flex-grow">{title}</h2>
         {headerContent && <div className="ml-2 flex-shrink-0" onClick={e => e.stopPropagation()}>{headerContent}</div>}
         <button 
-            className="ml-2 p-1 focus:outline-none focus:ring-2 focus:ring-primary rounded" 
+            className="ml-2 p-1 focus:outline-none focus:ring-2 focus:ring-primary rounded flex-shrink-0" // Added flex-shrink-0
             aria-label={isOpen ? "Collapse section" : "Expand section"}
             onClick={(e) => { e.stopPropagation(); handleToggle();}} // Allow icon click as well
         >
