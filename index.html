@@ -5,7 +5,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>My Utilities Hub</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%233B82F6'/%3E%3Ctext x='50' y='50' font-size='70' fill='white' text-anchor='middle' dy='.35em' font-family='sans-serif' font-weight='bold'%3EU%3C/text%3E%3C/svg%3E" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -18,198 +17,9 @@
               card: 'var(--card-color, #ffffff)',
               textPrimary: 'var(--text-primary-color, #212529)',
               textSecondary: 'var(--text-secondary-color, #495057)',
-            },
-            typography: (theme) => ({
-              DEFAULT: {
-                css: {
-                  color: theme('colors.textPrimary'),
-                  lineHeight: '1.75',
-                  a: {
-                    color: theme('colors.primary'),
-                    textDecoration: 'underline',
-                    fontWeight: '500',
-                    '&:hover': {
-                      color: theme('colors.blue.700', theme('colors.primary')),
-                    },
-                  },
-                  strong: { color: theme('colors.textPrimary'), fontWeight: '600' },
-                  'ol[type="1"]': {
-                    listStyleType: 'decimal',
-                    paddingLeft: theme('spacing.6'),
-                  },
-                  ul: {
-                    listStyleType: 'disc',
-                    paddingLeft: theme('spacing.6'),
-                  },
-                  'ol[type="1"] > li::before': { display: 'none' }, // Use browser default numbering
-                  'ul > li::before': { display: 'none' }, // Use browser default bullets
-                  li: {
-                    marginTop: theme('spacing.1'), // Reduced spacing for tighter lists
-                    marginBottom: theme('spacing.1'),
-                  },
-                  'ol ol, ul ul, ol ul, ul ol': {
-                    marginTop: theme('spacing.2'),
-                    marginBottom: theme('spacing.2'),
-                    paddingLeft: theme('spacing.5'),
-                  },
-                  hr: { borderColor: theme('colors.gray.300'), borderTopWidth: theme('borderWidth.DEFAULT'), marginTop: theme('spacing.8'), marginBottom: theme('spacing.8') },
-                  blockquote: {
-                    fontWeight: '500',
-                    fontStyle: 'italic',
-                    color: theme('colors.textSecondary'),
-                    borderLeftWidth: theme('borderWidth.4'),
-                    borderLeftColor: theme('colors.primary'),
-                    paddingLeft: theme('spacing.4'),
-                    quotes: '"\\201C""\\201D""\\2018""\\2019"',
-                  },
-                  'blockquote p:first-of-type::before': { content: '""' }, // Removed quotes from prose to avoid conflict
-                  'blockquote p:last-of-type::after': { content: '""' },  // Removed quotes from prose to avoid conflict
-                  h1: {
-                    color: theme('colors.textPrimary'),
-                    fontWeight: '700',
-                    fontSize: theme('fontSize.2xl'), // Adjusted to match typical GH style more
-                    borderBottomWidth: theme('borderWidth.DEFAULT'),
-                    borderBottomColor: theme('colors.gray.300'),
-                    paddingBottom: theme('spacing.2'),
-                    marginBottom: theme('spacing.4'),
-                    marginTop: theme('spacing.6'),
-                  },
-                  h2: {
-                    color: theme('colors.textPrimary'),
-                    fontWeight: '600',
-                    fontSize: theme('fontSize.xl'),
-                    borderBottomWidth: theme('borderWidth.DEFAULT'),
-                    borderBottomColor: theme('colors.gray.300'),
-                    paddingBottom: theme('spacing.2'),
-                    marginTop: theme('spacing.8'),
-                    marginBottom: theme('spacing.3'),
-                  },
-                  h3: {
-                    color: theme('colors.textPrimary'),
-                    fontWeight: '600',
-                    fontSize: theme('fontSize.lg'),
-                    marginTop: theme('spacing.6'),
-                    marginBottom: theme('spacing.2'),
-                  },
-                  h4: {
-                    color: theme('colors.textPrimary'),
-                    fontWeight: '600',
-                    fontSize: theme('fontSize.base'), // Adjusted h4
-                    marginTop: theme('spacing.4'),
-                    marginBottom: theme('spacing.1'),
-                  },
-                  'figure > figcaption': {
-                    color: theme('colors.textSecondary'),
-                    fontSize: theme('fontSize.sm'),
-                    marginTop: theme('spacing.2'),
-                  },
-                  code: { // Inline code
-                    color: theme('colors.pink.600'),
-                    backgroundColor: theme('colors.gray.100'),
-                    fontWeight: '400',
-                    fontSize: '0.875em',
-                    padding: '0.2em 0.4em',
-                    borderRadius: theme('borderRadius.md'),
-                    fontFamily: theme('fontFamily.mono'),
-                  },
-                  'a code': { color: theme('colors.primary') }, // Code within links
-                  pre: { // Code blocks
-                    color: theme('colors.gray.100'), // Light text for dark pre background by default
-                    backgroundColor: theme('colors.gray.800'), // Dark background for code blocks
-                    overflowX: 'auto',
-                    fontSize: theme('fontSize.sm'),
-                    padding: theme('spacing.4'),
-                    borderRadius: theme('borderRadius.lg'),
-                    fontFamily: theme('fontFamily.mono'),
-                  },
-                  'pre code': { // Code within pre
-                    backgroundColor: 'transparent',
-                    borderWidth: '0',
-                    borderRadius: '0',
-                    padding: '0',
-                    fontWeight: '400',
-                    color: 'inherit',
-                    fontSize: 'inherit',
-                    fontFamily: 'inherit',
-                    lineHeight: 'inherit', // Ensure consistent line height
-                  },
-                  table: {
-                    width: '100%',
-                    tableLayout: 'auto',
-                    textAlign: 'left',
-                    marginTop: theme('spacing.6'),
-                    marginBottom: theme('spacing.6'),
-                    fontSize: theme('fontSize.sm'),
-                    lineHeight: theme('lineHeight.tight'),
-                  },
-                  thead: {
-                    borderBottomWidth: '1px',
-                    borderBottomColor: theme('colors.gray.400'), // Darker for better visibility
-                  },
-                  'thead th': {
-                    color: theme('colors.textPrimary'),
-                    fontWeight: '600',
-                    paddingTop: theme('spacing.3'),
-                    paddingBottom: theme('spacing.3'),
-                    paddingLeft: theme('spacing.2'),
-                    paddingRight: theme('spacing.2'),
-                    verticalAlign: 'bottom',
-                  },
-                  'tbody tr': {
-                    borderBottomWidth: '1px',
-                    borderBottomColor: theme('colors.gray.300'),
-                  },
-                  'tbody tr:last-child': {
-                    borderBottomWidth: '0',
-                  },
-                  'tbody td': {
-                    padding: theme('spacing.2'),
-                    verticalAlign: 'top',
-                  },
-                  // Specific styles for dark mode using prose-invert
-                  // These will apply when .prose.prose-invert is active
-                  '&.prose-invert': {
-                    color: theme('colors.gray.300'),
-                    a: {
-                      color: theme('colors.blue.400'),
-                      '&:hover': {
-                        color: theme('colors.blue.300'),
-                      },
-                    },
-                    strong: { color: theme('colors.gray.100')},
-                    hr: { borderColor: theme('colors.gray.700') },
-                    blockquote: {
-                      color: theme('colors.gray.400'),
-                      borderLeftColor: theme('colors.blue.400'),
-                    },
-                    h1: { color: theme('colors.gray.100'), borderBottomColor: theme('colors.gray.700') },
-                    h2: { color: theme('colors.gray.100'), borderBottomColor: theme('colors.gray.700') },
-                    h3: { color: theme('colors.gray.100') },
-                    h4: { color: theme('colors.gray.100') },
-                    'figure > figcaption': { color: theme('colors.gray.400') },
-                    code: { // Inline code for dark mode
-                      color: theme('colors.pink.400'),
-                      backgroundColor: theme('colors.gray.700'),
-                    },
-                    'a code': { color: theme('colors.blue.400') },
-                    pre: { // Code blocks for dark mode (already dark, maybe adjust text)
-                      color: theme('colors.gray.200'),
-                      backgroundColor: theme('colors.gray.900'), // Even darker for contrast
-                    },
-                    table: { borderColor: theme('colors.gray.500')},
-                    'thead': { borderBottomColor: theme('colors.gray.600')},
-                    'thead th': { color: theme('colors.gray.100') },
-                    'tbody tr': { borderBottomColor: theme('colors.gray.700') },
-                  }
-                },
-              },
-            }),
+            }
           }
-        },
-        plugins: [
-            // The custom plugin that was here is removed.
-            // The typography styles are now more fully defined in theme.extend.typography.
-        ],
+        }
       }
     </script>
     <style>
@@ -232,28 +42,23 @@
       }
     </style>
 
-<link rel="stylesheet" href="/index.css">
   <script type="importmap">
 {
   "imports": {
-    "react": "https://esm.sh/react@^19.1.0",
     "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
     "react/": "https://esm.sh/react@^19.1.0/",
     "react": "https://esm.sh/react@^19.1.0",
     "react-router-dom": "https://esm.sh/react-router-dom@^7.6.1",
     "recharts": "https://esm.sh/recharts@^2.15.3",
-    "@google/genai": "https://esm.sh/@google/genai@^1.1.0",
-    "react-markdown": "https://esm.sh/react-markdown@9",
-    "rehype-raw": "https://esm.sh/rehype-raw@7",
-    "remark-gfm": "https://esm.sh/remark-gfm@4"
+    "@google/genai": "https://esm.sh/@google/genai@^1.1.0"
   }
 }
 </script>
-  <script type="module" crossorigin src="/my-utilities-hub/assets/index-BLdcxmIW.js"></script>
+  <script type="module" crossorigin src="/my-utilities-hub/assets/index-B9MMXqro.js"></script>
 </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
-</body>
+  </body>
 </html>
 <link rel="stylesheet" href="index.css">
