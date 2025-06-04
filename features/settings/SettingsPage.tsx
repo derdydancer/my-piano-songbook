@@ -1,4 +1,3 @@
-
 import React, { useRef, useState } from 'react';
 import { useAppData } from '../../contexts/AppDataContext';
 import { AppData, UtilityId, UtilitySetting } from '../../types';
@@ -11,6 +10,8 @@ import SwitchToggle from '../../components/common/SwitchToggle';
 import AlertModal from '../../components/common/AlertModal';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { UTILITY_IDS } from '../../constants';
+import useGeminiApiKey from '../../hooks/useGeminiApiKey';
+import Input from '../../components/common/Input';
 
 const SettingsPage: React.FC = () => {
   const { 
@@ -23,6 +24,8 @@ const SettingsPage: React.FC = () => {
   const { theme, toggleTheme } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const apiKeyStatus = geminiService.getApiKeyStatus();
+  const [geminiApiKey, setGeminiApiKey] = useGeminiApiKey();
+  const [apiKeyInput, setApiKeyInput] = useState(geminiApiKey);
 
   const [alertModal, setAlertModal] = useState<{ isOpen: boolean, title: string, message: string }>({ isOpen: false, title: '', message: '' });
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm: () => void, confirmText?: string, confirmButtonVariant?: 'primary'|'danger'|'secondary' }>({ isOpen: false, title: '', message: '', onConfirm: () => {} });
@@ -99,6 +102,11 @@ const SettingsPage: React.FC = () => {
     updateUtilitySetting(utilityId, { [field]: value });
   };
 
+  const handleApiKeySave = () => {
+    setGeminiApiKey(apiKeyInput);
+    openAlert('API Key Saved', 'Your Gemini API key has been saved locally.');
+  };
+
   return (
     <div className="p-4 space-y-6 mb-16">
       <h1 className="text-2xl font-bold text-textPrimary">Settings</h1>
@@ -140,23 +148,34 @@ const SettingsPage: React.FC = () => {
           </div>
            <div>
             <h3 className="text-lg font-semibold text-textPrimary mb-2">AI Assistant (Gemini API)</h3>
-             <div className="flex items-center p-3 rounded-md bg-background dark:bg-gray-700">
+            <div className="flex items-center p-3 rounded-md bg-background dark:bg-gray-700">
                 <InformationCircleIcon className={`w-6 h-6 mr-3 ${apiKeyStatus === 'valid' ? 'text-green-500' : apiKeyStatus === 'missing' ? 'text-red-500' : 'text-yellow-500'}`} />
                 <div>
                     <p className="text-sm font-medium text-textPrimary">
                         API Key Status: <span className={`font-bold ${apiKeyStatus === 'valid' ? 'text-green-500' : apiKeyStatus === 'missing' ? 'text-red-500' : 'text-yellow-500'}`}>{apiKeyStatus.toUpperCase()}</span>
                     </p>
                     <p className="text-xs text-textSecondary mt-1">
-                        {apiKeyStatus === 'missing' && " AI features may not function. API key must be set via process.env.API_KEY."}
-                        {apiKeyStatus === 'error' && " Error initializing AI. Check console and ensure API key in process.env.API_KEY is valid."}
-                        {apiKeyStatus === 'valid' && " AI Assistant is configured and ready."}
-                         {apiKeyStatus === 'unknown' && " AI Assistant status is initializing."}
+                        You can set your Gemini API key below. This is stored in your browser only.
+                        {apiKeyStatus === 'missing' && " AI features in 'Gifts' may not function."}
                     </p>
                 </div>
             </div>
-             <p className="mt-2 text-xs text-textSecondary">
-                The Gemini API key must be configured via the `process.env.API_KEY` environment variable. Manual key input in the app is not supported.
-            </p>
+            <div className="mt-4">
+                <h4 className="text-md font-semibold text-textPrimary mb-2">Set Gemini API Key</h4>
+                <div className="flex space-x-2">
+                    <Input
+                        type="password"
+                        value={apiKeyInput}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setApiKeyInput(e.target.value)}
+                        placeholder="Enter Gemini API Key"
+                        className="w-full"
+                    />
+                    <Button onClick={handleApiKeySave} type="button">Save</Button>
+                </div>
+                <p className="mt-2 text-xs text-textSecondary">
+                    Your key is stored locally and never sent anywhere except to Gemini when you use AI features.
+                </p>
+            </div>
           </div>
            <div>
             <h3 className="text-lg font-semibold text-textPrimary mb-2">About</h3>
