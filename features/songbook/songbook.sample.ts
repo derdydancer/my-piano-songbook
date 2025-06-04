@@ -11,9 +11,10 @@ const daysAgo = (days: number): string => {
 
 const createSampleSimplificationOptions = (chordName: string, aiNotes: string[]): ChordSimplificationOption[] => {
     const normalizedAiNotes = aiNotes.map(normalizeNoteToSharp);
-    const { voicings } = generateChordVoicings(chordName, undefined, undefined, normalizedAiNotes);
+    const { voicings, targetVoicingIndex } = generateChordVoicings(normalizedAiNotes, undefined, undefined, normalizedAiNotes);
     // For sample data, ensure at least one voicing, even if it's just the base notes if generateChordVoicings returns empty.
     const finalVoicings = voicings.length > 0 ? voicings : (normalizedAiNotes.length > 0 ? [normalizedAiNotes] : []);
+    const effectiveVoicingIndex = targetVoicingIndex !== -1 ? targetVoicingIndex : 0;
 
     return [
         {
@@ -21,6 +22,7 @@ const createSampleSimplificationOptions = (chordName: string, aiNotes: string[])
             baseNotes: normalizedAiNotes,
             allVoicings: finalVoicings,
             isOriginal: true,
+            lastSelectedVoicingIndex: effectiveVoicingIndex,
         }
     ];
 };
@@ -45,13 +47,17 @@ const sampleAnalysis1: PianoAnalysisResult = { // This is the AI's output struct
     ]
 };
 
-const sampleSavedUniqueChords1: SavedUniqueChordDefinition[] = sampleAnalysis1.uniqueChords.map(uc => ({
-    chordName: uc.chordName,
-    aiSuggestedNotes: uc.aiSuggestedNotes,
-    selectedSimplificationName: `Original (${uc.chordName})`,
-    selectedVoicingIndex: 0,
-    simplificationOptions: createSampleSimplificationOptions(uc.chordName, uc.aiSuggestedNotes),
-}));
+const sampleSavedUniqueChords1: SavedUniqueChordDefinition[] = sampleAnalysis1.uniqueChords.map(uc => {
+    const simplOptions = createSampleSimplificationOptions(uc.chordName, uc.aiSuggestedNotes);
+    const originalOption = simplOptions.find(opt => opt.isOriginal);
+    return {
+        chordName: uc.chordName,
+        aiSuggestedNotes: uc.aiSuggestedNotes,
+        selectedSimplificationName: originalOption ? originalOption.name : `Original (${uc.chordName})`,
+        selectedVoicingIndex: originalOption?.lastSelectedVoicingIndex ?? 0,
+        simplificationOptions: simplOptions,
+    };
+});
 
 
 const sampleAnalysis2: PianoAnalysisResult = {
@@ -69,13 +75,17 @@ const sampleAnalysis2: PianoAnalysisResult = {
         { chordName: "C" }, { chordName: "G" }, { chordName: "C" }
     ]
 };
-const sampleSavedUniqueChords2: SavedUniqueChordDefinition[] = sampleAnalysis2.uniqueChords.map(uc => ({
-    chordName: uc.chordName,
-    aiSuggestedNotes: uc.aiSuggestedNotes,
-    selectedSimplificationName: `Original (${uc.chordName})`,
-    selectedVoicingIndex: 0,
-    simplificationOptions: createSampleSimplificationOptions(uc.chordName, uc.aiSuggestedNotes),
-}));
+const sampleSavedUniqueChords2: SavedUniqueChordDefinition[] = sampleAnalysis2.uniqueChords.map(uc => {
+    const simplOptions = createSampleSimplificationOptions(uc.chordName, uc.aiSuggestedNotes);
+    const originalOption = simplOptions.find(opt => opt.isOriginal);
+    return {
+        chordName: uc.chordName,
+        aiSuggestedNotes: uc.aiSuggestedNotes,
+        selectedSimplificationName: originalOption ? originalOption.name : `Original (${uc.chordName})`,
+        selectedVoicingIndex: originalOption?.lastSelectedVoicingIndex ?? 0,
+        simplificationOptions: simplOptions,
+    };
+});
 
 
 const sampleAnalysisHappyBirthday: PianoAnalysisResult = {
@@ -94,13 +104,17 @@ const sampleAnalysisHappyBirthday: PianoAnalysisResult = {
       { chordName: "G", originalContext: "Happy Birthday to [G]you." },
     ]
 };
-const sampleSavedUniqueChordsHB: SavedUniqueChordDefinition[] = sampleAnalysisHappyBirthday.uniqueChords.map(uc => ({
-    chordName: uc.chordName,
-    aiSuggestedNotes: uc.aiSuggestedNotes,
-    selectedSimplificationName: `Original (${uc.chordName})`,
-    selectedVoicingIndex: 0,
-    simplificationOptions: createSampleSimplificationOptions(uc.chordName, uc.aiSuggestedNotes),
-}));
+const sampleSavedUniqueChordsHB: SavedUniqueChordDefinition[] = sampleAnalysisHappyBirthday.uniqueChords.map(uc => {
+    const simplOptions = createSampleSimplificationOptions(uc.chordName, uc.aiSuggestedNotes);
+    const originalOption = simplOptions.find(opt => opt.isOriginal);
+    return {
+        chordName: uc.chordName,
+        aiSuggestedNotes: uc.aiSuggestedNotes,
+        selectedSimplificationName: originalOption ? originalOption.name : `Original (${uc.chordName})`,
+        selectedVoicingIndex: originalOption?.lastSelectedVoicingIndex ?? 0,
+        simplificationOptions: simplOptions,
+    };
+});
 
 
 export const sampleSavedPianoSongs: SavedPianoSong[] = [

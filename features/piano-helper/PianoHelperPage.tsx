@@ -74,10 +74,12 @@ const PianoHelperPage: React.FC = () => {
     const processedChords: DisplayableChordInfo[] = analysis.uniqueChords.map(aiChord => {
       const normalizedAiNotes = aiChord.aiSuggestedNotes.map(normalizeNoteToSharp);
       
-      const { voicings: originalVoicings, targetVoicingIndex: initialVoicingIdxForOriginal } = generateChordVoicings(
-        aiChord.chordName, undefined, undefined, normalizedAiNotes, normalizedAiNotes 
+      // Generate voicings for the original AI-suggested notes, trying to find the AI's exact suggestion.
+      const { voicings: originalVoicings, targetVoicingIndex: aiVoicingIndexInSortedList } = generateChordVoicings(
+         normalizedAiNotes, undefined, undefined, normalizedAiNotes
       );
-      const effectiveInitialVoicingIndex = initialVoicingIdxForOriginal !== -1 ? initialVoicingIdxForOriginal : 0;
+      
+      const effectiveInitialVoicingIndex = aiVoicingIndexInSortedList !== -1 ? aiVoicingIndexInSortedList : 0;
 
       const originalOption: ChordSimplificationOption = {
         name: `Original (${aiChord.chordName})`,
@@ -91,7 +93,8 @@ const PianoHelperPage: React.FC = () => {
       
       const allOptions = [originalOption, ...simplificationSteps.map(step => {
         const stepAnalysis = getChordAnalysisFromNotes(step.baseNotes);
-        const { voicings: stepVoicings } = generateChordVoicings(stepAnalysis?.name || step.name, undefined, undefined, step.baseNotes);
+        // For simplifications, don't pass targetVoicingToFind to generateChordVoicings
+        const { voicings: stepVoicings } = generateChordVoicings(step.baseNotes);
         return {
           name: stepAnalysis ? stepAnalysis.name : step.name, 
           baseNotes: step.baseNotes,
@@ -106,7 +109,7 @@ const PianoHelperPage: React.FC = () => {
         chordName: aiChord.chordName,
         aiSuggestedNotes: normalizedAiNotes,
         selectedSimplificationName: originalOption.name, 
-        selectedVoicingIndex: effectiveInitialVoicingIndex,
+        selectedVoicingIndex: effectiveInitialVoicingIndex, // Preselect the AI's suggested voicing
         simplificationOptions: allOptions,
       };
     });

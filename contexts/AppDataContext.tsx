@@ -132,39 +132,62 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 chordSpecificMigration = true;
             }
             if (!migratedChord.aiSuggestedNotes) {
-                migratedChord.aiSuggestedNotes = [];
+                migratedChord.aiSuggestedNotes = []; // Ensure it's an array
                 chordSpecificMigration = true;
+            } else { // Ensure all notes within aiSuggestedNotes are normalized
+                const normalizedAiNotes = migratedChord.aiSuggestedNotes.map(normalizeNoteToSharp);
+                if (JSON.stringify(normalizedAiNotes) !== JSON.stringify(migratedChord.aiSuggestedNotes)) {
+                    migratedChord.aiSuggestedNotes = normalizedAiNotes;
+                    chordSpecificMigration = true;
+                }
             }
 
+
             if (!migratedChord.simplificationOptions || migratedChord.simplificationOptions.length === 0) {
-                const { voicings: originalVoicings, targetVoicingIndex: initialVoicingIdx } = generateChordVoicings(
-                    migratedChord.chordName || 'Chord', undefined, undefined, migratedChord.aiSuggestedNotes, migratedChord.aiSuggestedNotes
+                const { voicings: originalVoicings, targetVoicingIndex: aiVoicingIdxInSortedList } = generateChordVoicings(
+                    migratedChord.aiSuggestedNotes, // baseNotesInput
+                    undefined, // minMidi
+                    undefined, // maxMidi
+                    migratedChord.aiSuggestedNotes  // targetVoicingToFind
                 );
+                const effectiveInitialVoicingIndex = aiVoicingIdxInSortedList !== -1 ? aiVoicingIdxInSortedList : 0;
+
                 const originalOption: ChordSimplificationOption = {
                     name: `Original (${migratedChord.chordName || 'Chord'})`,
                     baseNotes: [...migratedChord.aiSuggestedNotes!].sort((a,b) => (getNoteMidiValue(a) ?? 0) - (getNoteMidiValue(b) ?? 0)),
                     allVoicings: originalVoicings.length > 0 ? originalVoicings : (migratedChord.aiSuggestedNotes!.length > 0 ? [[...migratedChord.aiSuggestedNotes!]] : []),
                     isOriginal: true,
-                    lastSelectedVoicingIndex: initialVoicingIdx !== -1 ? initialVoicingIdx : 0,
+                    lastSelectedVoicingIndex: effectiveInitialVoicingIndex,
                 };
                 migratedChord.simplificationOptions = [originalOption];
                 migratedChord.selectedSimplificationName = originalOption.name;
-                migratedChord.selectedVoicingIndex = initialVoicingIdx !== -1 ? initialVoicingIdx : 0;
+                migratedChord.selectedVoicingIndex = effectiveInitialVoicingIndex;
                 chordSpecificMigration = true;
             } else {
                  migratedChord.simplificationOptions = migratedChord.simplificationOptions.map(opt => {
                     let optChanged = false;
                     if (opt.lastSelectedVoicingIndex === undefined) {
+                        // If it's the original option and selected, its lastSelectedVoicingIndex should be the chord's selectedVoicingIndex
                         if (opt.isOriginal && migratedChord.selectedSimplificationName === opt.name) {
                             opt.lastSelectedVoicingIndex = migratedChord.selectedVoicingIndex;
                         } else {
-                            opt.lastSelectedVoicingIndex = undefined; 
+                           // For other simplifications, if no memory, it remains undefined or we could try to find a match.
+                           // For now, keeping it undefined unless actively chosen.
+                           opt.lastSelectedVoicingIndex = undefined; 
                         }
                         optChanged = true;
                     }
                     if (opt.allVoicings.length === 0 && opt.baseNotes.length > 0) {
-                        const { voicings: newVoicings } = generateChordVoicings(opt.name, undefined, undefined, opt.baseNotes, opt.isOriginal ? migratedChord.aiSuggestedNotes : undefined);
+                        const { voicings: newVoicings, targetVoicingIndex: newTargetIdx } = generateChordVoicings(
+                            opt.baseNotes, 
+                            undefined, 
+                            undefined,
+                            opt.isOriginal ? migratedChord.aiSuggestedNotes : undefined // Try to find AI suggestion if it's the original option
+                        );
                         opt.allVoicings = newVoicings.length > 0 ? newVoicings : [[...opt.baseNotes]];
+                        if (opt.isOriginal && opt.lastSelectedVoicingIndex === undefined) { // If original's memory was just set
+                            opt.lastSelectedVoicingIndex = newTargetIdx !== -1 ? newTargetIdx : 0;
+                        }
                         optChanged = true;
                     }
                     if (optChanged) pianoSongsMigrationNeeded = true;
@@ -177,7 +200,13 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                 chordSpecificMigration = true;
             }
             if (migratedChord.selectedVoicingIndex === undefined) {
-                migratedChord.selectedVoicingIndex = 0;
+                // If selectedVoicingIndex became undefined, try to re-select based on lastSelectedVoicingIndex of the current simplification
+                const currentSimpl = migratedChord.simplificationOptions?.find(opt => opt.name === migratedChord.selectedSimplificationName);
+                if (currentSimpl && currentSimpl.lastSelectedVoicingIndex !== undefined && currentSimpl.lastSelectedVoicingIndex < currentSimpl.allVoicings.length) {
+                    migratedChord.selectedVoicingIndex = currentSimpl.lastSelectedVoicingIndex;
+                } else {
+                    migratedChord.selectedVoicingIndex = 0; // Fallback
+                }
                 chordSpecificMigration = true;
             }
 
@@ -186,6 +215,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
                  if (selectedSimpl.allVoicings.length > 0) {
                     migratedChord.selectedVoicingIndex = 0;
                  } else {
+                    // This case should ideally not happen if allVoicings is guaranteed to have at least one item if baseNotes exist
                     migratedChord.selectedVoicingIndex = 0; 
                  }
                 chordSpecificMigration = true;

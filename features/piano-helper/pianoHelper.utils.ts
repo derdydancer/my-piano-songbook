@@ -1,3 +1,4 @@
+
 // features/piano-helper/pianoHelper.utils.ts
 import { ChordAnalysis, ChordSimplificationOption } from '../../types'; // Import ChordAnalysis type
 
@@ -17,7 +18,7 @@ export const getNoteMidiValue = (note: string): number | null => {
     if (!match) return null;
     const noteNamePart = match[1];
     // Ensure first letter is uppercase for NOTE_MIDI_VALUES lookup
-    const normalizedNoteName = noteNamePart.charAt(0).toUpperCase() + noteNamePart.slice(1);
+    const normalizedNoteName = noteNamePart.charAt(0).toUpperCase() + noteNamePart.slice(1).replace('b', 'b').replace('#', '#');
     const octave = parseInt(match[2], 10);
 
     const baseMidi = NOTE_MIDI_VALUES[normalizedNoteName];
@@ -33,6 +34,11 @@ export const getNoteFromMidiValue = (midi: number, preferSharp: boolean = true):
     return `${noteName}${octave}`;
 };
 
+/**
+ * Normalizes a note name (e.g., "db4", "A#5") to its sharp equivalent with octave.
+ * @param noteNameWithOctave The input note string.
+ * @returns Normalized note string (e.g., "C#4", "A#5") or original if no normalization needed/possible.
+ */
 export const normalizeNoteToSharp = (noteNameWithOctave: string): string => {
     const midiValue = getNoteMidiValue(noteNameWithOctave);
     if (midiValue !== null) {
@@ -79,10 +85,9 @@ const getNotesFromIntervals = (rootNoteWithOctave: string, intervals: number[]):
 
 
 export const generateChordVoicings = (
-    _chordNameStr: string,
+    baseNotesInput?: string[],
     minMidi: number = 36, // C2
     maxMidi: number = 84, // C6
-    baseNotesInput?: string[],
     targetVoicingToFind?: string[]
 ): { voicings: string[][], targetVoicingIndex: number } => {
     const allResultVoicingsSet = new Set<string>();
@@ -103,16 +108,17 @@ export const generateChordVoicings = (
     }
 
     const numNotesInChord = uniquePitchClasses.length;
+    const rootPitchClassForVoicingSort = uniquePitchClasses[0]; // Lowest pitch class in the set is the "root" for sorting
 
     const findVoicingCombinationsRecursive = (
         pitchClassIdx: number,
         currentMidiVoicing: number[]
     ) => {
-        if (allResultVoicingsSet.size >= 150) return; // Increased limit slightly
+        if (allResultVoicingsSet.size >= 150) return; 
 
         if (pitchClassIdx === numNotesInChord) {
             const sortedVoicing = [...currentMidiVoicing].sort((a, b) => a - b);
-            if (sortedVoicing.length === 0) return; // Should not happen if numNotesInChord > 0
+            if (sortedVoicing.length === 0) return;
             const lowestNote = sortedVoicing[0];
             const highestNote = sortedVoicing[sortedVoicing.length - 1];
             const span = highestNote - lowestNote;
@@ -129,7 +135,7 @@ export const generateChordVoicings = (
 
         for (let octaveNum = startOctaveSearch; octaveNum <= endOctaveSearch; octaveNum++) {
             const midiValue = currentPitchClass + ((octaveNum + 1) * 12);
-            if (midiValue >= minMidi - 12 && midiValue <= maxMidi + 12) { // Slightly wider search before span check
+            if (midiValue >= minMidi - 12 && midiValue <= maxMidi + 12) { 
                 currentMidiVoicing.push(midiValue);
                 findVoicingCombinationsRecursive(pitchClassIdx + 1, currentMidiVoicing);
                 currentMidiVoicing.pop();
@@ -141,37 +147,42 @@ export const generateChordVoicings = (
 
     let finalVoicings: string[][] = Array.from(allResultVoicingsSet).map(s => JSON.parse(s));
     
-    finalVoicings.sort((voicingA, voicingB) => {
-        const midiA = voicingA.map(n => getNoteMidiValue(n) || 0);
-        const midiB = voicingB.map(n => getNoteMidiValue(n) || 0);
-        const lowestA = Math.min(...midiA);
-        const lowestB = Math.min(...midiB);
-        if (lowestA !== lowestB) return lowestA - lowestB;
+    finalVoicings.sort((voicingA_str, voicingB_str) => {
+        const voicingA_midi = voicingA_str.map(n => getNoteMidiValue(n) || 0);
+        const voicingB_midi = voicingB_str.map(n => getNoteMidiValue(n) || 0);
 
-        const spanA = Math.max(...midiA) - lowestA;
-        const spanB = Math.max(...midiB) - lowestB;
+        const lowestNoteMidiA = voicingA_midi[0]; // Assumes voicings are already sorted by note MIDI
+        const lowestNoteMidiB = voicingB_midi[0];
+
+        const isRootPositionA = (lowestNoteMidiA % 12 === rootPitchClassForVoicingSort);
+        const isRootPositionB = (lowestNoteMidiB % 12 === rootPitchClassForVoicingSort);
+
+        if (isRootPositionA && !isRootPositionB) return -1;
+        if (!isRootPositionA && isRootPositionB) return 1;
+
+        // If both are root position or both are not:
+        // 1. Sort by the MIDI value of the lowest note (primary for root positions, secondary for others)
+        if (lowestNoteMidiA !== lowestNoteMidiB) return lowestNoteMidiA - lowestNoteMidiB;
+
+        // 2. Smallest Span
+        const spanA = voicingA_midi[voicingA_midi.length - 1] - lowestNoteMidiA;
+        const spanB = voicingB_midi[voicingB_midi.length - 1] - lowestNoteMidiB;
         if (spanA !== spanB) return spanA - spanB;
         
-        const sumA = midiA.reduce((s, n) => s + n, 0);
-        const sumB = midiB.reduce((s, n) => s + n, 0);
+        // 3. Smallest Sum of MIDI values
+        const sumA = voicingA_midi.reduce((s, n) => s + n, 0);
+        const sumB = voicingB_midi.reduce((s, n) => s + n, 0);
         return sumA - sumB;
     });
-
 
     let foundTargetIndex = -1;
     if (targetVoicingToFind && targetVoicingToFind.length > 0 && targetVoicingToFind.length === numNotesInChord) {
         const normalizedTargetVoicing = targetVoicingToFind.map(normalizeNoteToSharp).sort((a,b) => (getNoteMidiValue(a)??0) - (getNoteMidiValue(b)??0));
         
-        foundTargetIndex = finalVoicings.findIndex(v => 
-            v.length === normalizedTargetVoicing.length &&
-            v.every((note, idx) => normalizeNoteToSharp(note) === normalizedTargetVoicing[idx])
+        foundTargetIndex = finalVoicings.findIndex(v_str => 
+            v_str.length === normalizedTargetVoicing.length &&
+            v_str.every((note, idx) => normalizeNoteToSharp(note) === normalizedTargetVoicing[idx])
         );
-        
-        if (foundTargetIndex !== -1) {
-            const [target] = finalVoicings.splice(foundTargetIndex, 1);
-            finalVoicings.unshift(target);
-            foundTargetIndex = 0; 
-        }
     }
     
     return { voicings: finalVoicings, targetVoicingIndex: foundTargetIndex };
@@ -355,9 +366,10 @@ const addUniqueSimplification = (
     collection: ChordSimplificationOption[],
     name: string,
     baseNotes: string[],
-    isOriginal: boolean = false
+    isOriginal: boolean = false,
+    aiSuggestedNotesForOriginal?: string[] // Only for original option to find AI's preferred voicing
 ): void => {
-    if (baseNotes.length < 2) return; 
+    if (baseNotes.length < 2 && !(baseNotes.length === 1 && isOriginal)) return; // Allow single note for original if AI gave one
 
     const sortedNotes = [...baseNotes].sort((a,b) => (getNoteMidiValue(a)??0) - (getNoteMidiValue(b)??0));
     const notesKey = sortedNotes.join(',');
@@ -365,17 +377,27 @@ const addUniqueSimplification = (
     const analysisForVoicingName = getChordAnalysisFromNotes(sortedNotes);
     const nameForVoicingGen = analysisForVoicingName ? analysisForVoicingName.name : name;
 
-    const { voicings: generatedVoicings } = generateChordVoicings(nameForVoicingGen, undefined, undefined, sortedNotes);
+    // For original, pass AI notes to find its index. For others, don't.
+    const targetVoicingForGen = isOriginal ? aiSuggestedNotesForOriginal : undefined;
+    const { voicings: generatedVoicings, targetVoicingIndex } = generateChordVoicings(sortedNotes, undefined, undefined, targetVoicingForGen);
 
     if (generatedVoicings.length === 0 && sortedNotes.length > 0) {
-        generatedVoicings.push([...sortedNotes]);
+        generatedVoicings.push([...sortedNotes]); // Fallback: use base notes as a single voicing
     }
     
     if (generatedVoicings.length === 0) return;
 
 
     if (!collection.some(opt => opt.name === nameForVoicingGen && opt.baseNotes.join(',') === notesKey)) {
-        collection.push({ name: nameForVoicingGen, baseNotes: sortedNotes, allVoicings: generatedVoicings, isOriginal, lastSelectedVoicingIndex: isOriginal ? 0 : undefined });
+        collection.push({ 
+            name: nameForVoicingGen, 
+            baseNotes: sortedNotes, 
+            allVoicings: generatedVoicings, 
+            isOriginal, 
+            // For original, use targetVoicingIndex from generateChordVoicings
+            // For others, default to undefined (or 0 if needed later)
+            lastSelectedVoicingIndex: isOriginal ? (targetVoicingIndex !== -1 ? targetVoicingIndex : 0) : undefined 
+        });
     }
 };
 
@@ -388,20 +410,19 @@ export const generateChordSimplifications = (originalAINotes: string[]): ChordSi
 
     if (!initialAnalysis || initialAnalysis.notes.length < 2) return simplifications;
 
-    let currentAnalysis = initialAnalysis;
+    // let currentAnalysis = initialAnalysis; // Not needed anymore
     let currentNotes = [...initialAnalysis.notes];
 
     const generateStep = (notesToSimplify: string[], targetType: '11th' | '9th' | '7th' | 'triad' | '6th_to_triad' | 'add9_to_triad' | '7sus_to_sus_or_7th' | 'dom7_to_triad' | 'dim_to_triad' | 'm7b5_to_dim_triad'): string[] | null => {
         const analysis = getChordAnalysisFromNotes(notesToSimplify);
         if (!analysis || analysis.type === 'single') return null;
 
-        const rootPc = (getNoteMidiValue(analysis.root + '0') ?? 0) % 12; // Use a default octave for root to get PC
+        const rootPc = (getNoteMidiValue(analysis.root + '0') ?? 0) % 12; 
         
-        // Find the actual root note instance from the chord to determine its octave.
         const actualRootNoteInChord = analysis.notes
             .filter(note => (getNoteMidiValue(note) ?? -1) % 12 === rootPc)
             .sort((a, b) => (getNoteMidiValue(a) ?? 0) - (getNoteMidiValue(b) ?? 0))[0]
-            || analysis.notes[0]; // Fallback to the first note if specific root not found (should generally not happen)
+            || analysis.notes[0]; 
 
         const buildNotesFromCurrentChordRootOctave = (intervals: number[]): string[] => {
             return getNotesFromIntervals(actualRootNoteInChord, intervals);
@@ -410,25 +431,25 @@ export const generateChordSimplifications = (originalAINotes: string[]): ChordSi
         let simplifiedIntervals: number[] | null = null;
 
         switch (targetType) {
-            case '11th': // From 13th
+            case '11th': 
                 if (analysis.hasThirteenth) {
-                    simplifiedIntervals = analysis.intervals.filter(i => i !== INTERVALS.M6 && i !== INTERVALS.m6); // Remove 13th (M6 or m6)
-                    if (!analysis.hasEleventh && simplifiedIntervals.includes(INTERVALS.P4)) simplifiedIntervals = simplifiedIntervals.filter(i => i !== INTERVALS.P4); // if no #11, remove natural 11 too
+                    simplifiedIntervals = analysis.intervals.filter(i => i !== INTERVALS.M6 && i !== INTERVALS.m6); 
+                    if (!analysis.hasEleventh && simplifiedIntervals.includes(INTERVALS.P4)) simplifiedIntervals = simplifiedIntervals.filter(i => i !== INTERVALS.P4); 
                 }
                 break;
-            case '9th': // From 11th (or 13th if directly simplifying)
+            case '9th': 
                 if (analysis.hasEleventh || analysis.hasThirteenth) {
                     simplifiedIntervals = analysis.intervals.filter(i => i !== INTERVALS.P4 && i !== INTERVALS.A4 && i !== INTERVALS.M6 && i !== INTERVALS.m6);
                 }
                 break;
-            case '7th': // From 9th (or 11th/13th)
+            case '7th': 
                 if (analysis.hasNinth || analysis.hasEleventh || analysis.hasThirteenth) {
                      simplifiedIntervals = analysis.intervals.filter(i => i !== INTERVALS.M2 && i !== INTERVALS.m2 && i !== INTERVALS.P4 && i !== INTERVALS.A4 && i !== INTERVALS.M6 && i !== INTERVALS.m6);
                 }
                 break;
-            case 'triad': // From 7th, 6th, add9
+            case 'triad': 
                  if (analysis.hasSeventh || analysis.intervals.includes(INTERVALS.M6) || analysis.intervals.includes(INTERVALS.M2)) {
-                    simplifiedIntervals = [0]; // Root
+                    simplifiedIntervals = [0]; 
                     if (analysis.intervals.includes(INTERVALS.M3)) simplifiedIntervals.push(INTERVALS.M3);
                     else if (analysis.intervals.includes(INTERVALS.m3)) simplifiedIntervals.push(INTERVALS.m3);
                     if (analysis.intervals.includes(INTERVALS.P5)) simplifiedIntervals.push(INTERVALS.P5);
@@ -436,47 +457,42 @@ export const generateChordSimplifications = (originalAINotes: string[]): ChordSi
                     else if (analysis.intervals.includes(INTERVALS.A5)) simplifiedIntervals.push(INTERVALS.A5);
                 }
                 break;
-             case '6th_to_triad': // Specific C6 -> C
-                if (analysis.intervals.includes(INTERVALS.M6) && !analysis.hasSeventh && analysis.notes.length > 3) { // e.g. C6
+             case '6th_to_triad': 
+                if (analysis.intervals.includes(INTERVALS.M6) && !analysis.hasSeventh && analysis.notes.length > 3) { 
                     simplifiedIntervals = [0, analysis.intervals.includes(INTERVALS.M3) ? INTERVALS.M3 : INTERVALS.m3, INTERVALS.P5];
                 }
                 break;
-            case 'add9_to_triad': // Specific Cadd9 -> C
+            case 'add9_to_triad': 
                 if (analysis.extensions.includes("add9") && !analysis.hasSeventh && analysis.notes.length > 3) {
                     simplifiedIntervals = [0, analysis.intervals.includes(INTERVALS.M3) ? INTERVALS.M3 : INTERVALS.m3, INTERVALS.P5];
                 }
                 break;
-            case 'dom7_to_triad': // G7 -> G
+            case 'dom7_to_triad': 
                 if (analysis.type === 'dom' && analysis.hasSeventh) {
                      simplifiedIntervals = [0, INTERVALS.M3, INTERVALS.P5];
                 }
                 break;
-            case '7sus_to_sus_or_7th': // G7sus4 -> Gsus4 or G7
+            case '7sus_to_sus_or_7th': 
                 if (analysis.name.includes("7sus4")) {
-                     // Option 1: Gsus4
                     const sus4Notes = buildNotesFromCurrentChordRootOctave([0, INTERVALS.P4, INTERVALS.P5]);
                     const sus4Analysis = getChordAnalysisFromNotes(sus4Notes);
                     if(sus4Analysis) addUniqueSimplification(simplifications, sus4Analysis.name, sus4Notes);
-                    // Option 2: G7
                     const g7Notes = buildNotesFromCurrentChordRootOctave([0, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7]);
                      const g7Analysis = getChordAnalysisFromNotes(g7Notes);
                     if(g7Analysis) addUniqueSimplification(simplifications, g7Analysis.name, g7Notes);
-                    return null; // Handled multiple additions
+                    return null; 
                 }
                 break;
-             case 'dim_to_triad': // Cdim7 -> Cdim, Co -> Co (no change if already triad)
+             case 'dim_to_triad': 
                 if (analysis.type === 'dim') {
-                    if(analysis.hasSeventh) simplifiedIntervals = [0, INTERVALS.m3, INTERVALS.d5]; // Cdim
-                    // if already a dim triad, no further simplification by this rule
+                    if(analysis.hasSeventh) simplifiedIntervals = [0, INTERVALS.m3, INTERVALS.d5]; 
                 }
                 break;
-            case 'm7b5_to_dim_triad': // Cm7b5 -> Cdim
+            case 'm7b5_to_dim_triad': 
                 if (analysis.name.includes("m7b5")) {
-                     simplifiedIntervals = [0, INTERVALS.m3, INTERVALS.d5]; // Cdim
+                     simplifiedIntervals = [0, INTERVALS.m3, INTERVALS.d5]; 
                 }
                 break;
-
-
         }
         return simplifiedIntervals ? buildNotesFromCurrentChordRootOctave(Array.from(new Set(simplifiedIntervals)).sort((a,b)=>a-b)) : null;
     };
@@ -497,13 +513,11 @@ export const generateChordSimplifications = (originalAINotes: string[]): ChordSi
         }
     }
     
-    // Apply specific one-step simplifications from guide based on initial analysis
     const specificSimplifications: ('6th_to_triad' | 'add9_to_triad' | 'dom7_to_triad' | '7sus_to_sus_or_7th'| 'dim_to_triad' | 'm7b5_to_dim_triad')[] = [
         '6th_to_triad', 'add9_to_triad', 'dom7_to_triad', '7sus_to_sus_or_7th', 'dim_to_triad', 'm7b5_to_dim_triad'
     ];
 
     for (const specificType of specificSimplifications) {
-        // Use original notes for these specific one-step checks
         const simplified = generateStep(initialAnalysis.notes, specificType); 
         if (simplified && simplified.length > 0 && simplified.join(',') !== initialAnalysis.notes.join(',')) {
              const simplifiedAnalysis = getChordAnalysisFromNotes(simplified);
@@ -511,17 +525,13 @@ export const generateChordSimplifications = (originalAINotes: string[]): ChordSi
         }
     }
 
-
-    // Special G13 handling from guide: G13 -> G9 OR G13 -> G7(13)
     if (initialAnalysis.name.includes("13") && initialAnalysis.type === 'dom') {
-        // G13 -> G9 (remove 13th)
         const g9Notes = generateStep(initialAnalysis.notes, '9th');
         if (g9Notes) {
             const g9Analysis = getChordAnalysisFromNotes(g9Notes);
             if(g9Analysis) addUniqueSimplification(simplifications, g9Analysis.name, g9Notes);
         }
-        // G13 -> G7(13) (remove 9th and 11th, keep 13th)
-        const g7_13_Intervals = [0, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M6]; // R,3,5,7,13
+        const g7_13_Intervals = [0, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M6]; 
         
         const rootPcForInitialAnalysis = (getNoteMidiValue(initialAnalysis.root + "0") ?? 0) % 12; 
         const actualRootNoteForInitialChord = initialAnalysis.notes
@@ -530,16 +540,15 @@ export const generateChordSimplifications = (originalAINotes: string[]): ChordSi
             || initialAnalysis.notes[0];
 
         const g7_13_Notes = getNotesFromIntervals(actualRootNoteForInitialChord, g7_13_Intervals.filter(i => initialAnalysis.intervals.includes(i)));
-         if (g7_13_Notes.length >= 4) { // Ensure it's at least a 7th + 13th
+         if (g7_13_Notes.length >= 4) { 
             const g7_13_Analysis = getChordAnalysisFromNotes(g7_13_Notes);
             if(g7_13_Analysis) addUniqueSimplification(simplifications, g7_13_Analysis.name, g7_13_Notes);
         }
     }
 
-
     const uniqueSimplificationsMap = new Map<string, ChordSimplificationOption>();
     simplifications.forEach(s => {
-        const key = `${s.name}_${s.baseNotes.join(',')}`; // Use baseNotes for uniqueness key
+        const key = `${s.name}_${s.baseNotes.join(',')}`; 
         if (!uniqueSimplificationsMap.has(key)) {
             uniqueSimplificationsMap.set(key, s);
         }
@@ -635,4 +644,82 @@ export const calculateOverallOctaveRange = (
   startOctave = Math.max(1, Math.min(startOctave, 6 - numOctaves + 1));
 
   return { numOctaves, startOctave };
+};
+
+interface FixedTwoOctaveRange {
+  startOctave: number;
+  numOctaves: 2;
+}
+
+export const selectBestTwoOctaveRange = (notes: string[]): FixedTwoOctaveRange => {
+  const defaultRange: FixedTwoOctaveRange = { startOctave: 3, numOctaves: 2 }; // C3-B4
+  if (!notes || notes.length === 0) return defaultRange;
+
+  const noteMidiValues = notes.map(n => getNoteMidiValue(normalizeNoteToSharp(n))).filter(m => m !== null) as number[];
+  if (noteMidiValues.length === 0) return defaultRange;
+
+  const minNoteMidi = Math.min(...noteMidiValues);
+  const maxNoteMidi = Math.max(...noteMidiValues);
+
+  const targetRangesDefinition = [
+    { startOctave: 2, minMidi: 36, maxMidi: 59 }, // C2-B3
+    { startOctave: 3, minMidi: 48, maxMidi: 71 }, // C3-B4
+    { startOctave: 4, minMidi: 60, maxMidi: 83 }, // C4-B5
+    { startOctave: 5, minMidi: 72, maxMidi: 95 }, // C5-B6
+  ];
+
+  let bestRangeOption: { startOctave: number; minMidi: number; maxMidi: number } | null = null;
+  let maxNotesContained = -1;
+  let minNotesOutside = Infinity;
+  let bestRangeMinNotesSpan = Infinity; // Span of notes within the chosen range
+
+  for (const range of targetRangesDefinition) {
+    let notesInThisRangeCount = 0;
+    let notesInThisRangeMidi: number[] = [];
+
+    noteMidiValues.forEach(midi => {
+      if (midi >= range.minMidi && midi <= range.maxMidi) {
+        notesInThisRangeCount++;
+        notesInThisRangeMidi.push(midi);
+      }
+    });
+    const notesOutsideThisRangeCount = noteMidiValues.length - notesInThisRangeCount;
+    const currentSpan = notesInThisRangeMidi.length > 0 ? Math.max(...notesInThisRangeMidi) - Math.min(...notesInThisRangeMidi) : Infinity;
+
+
+    if (notesInThisRangeCount > maxNotesContained) {
+      maxNotesContained = notesInThisRangeCount;
+      minNotesOutside = notesOutsideThisRangeCount;
+      bestRangeOption = range;
+      bestRangeMinNotesSpan = currentSpan;
+    } else if (notesInThisRangeCount === maxNotesContained) {
+      if (notesOutsideThisRangeCount < minNotesOutside) {
+        minNotesOutside = notesOutsideThisRangeCount;
+        bestRangeOption = range;
+        bestRangeMinNotesSpan = currentSpan;
+      } else if (notesOutsideThisRangeCount === minNotesOutside) {
+        if (currentSpan < bestRangeMinNotesSpan) {
+            bestRangeMinNotesSpan = currentSpan;
+            bestRangeOption = range;
+        }
+      }
+    }
+  }
+  
+  if (!bestRangeOption) {
+    const averageMidi = noteMidiValues.reduce((sum, val) => sum + val, 0) / noteMidiValues.length;
+    let closestStartOctave = defaultRange.startOctave;
+    let minAvgDiff = Infinity;
+    for (const range of targetRangesDefinition) {
+        const rangeCenterMidi = (range.minMidi + range.maxMidi) / 2;
+        const diff = Math.abs(averageMidi - rangeCenterMidi);
+        if (diff < minAvgDiff) {
+            minAvgDiff = diff;
+            closestStartOctave = range.startOctave;
+        }
+    }
+     return { startOctave: closestStartOctave, numOctaves: 2 };
+  }
+
+  return { startOctave: bestRangeOption.startOctave, numOctaves: 2 };
 };

@@ -16,9 +16,30 @@ export const KEY_TEXT_COLOR_WHITE_KEY = '#4A5568'; // Gray for text on white key
 export const KEY_TEXT_COLOR_BLACK_KEY = '#E2E8F0'; // Lighter gray for text on black key (if ever needed)
 export const KEY_STROKE_COLOR = '#A0AEC0'; // Border color for keys
 
-// New highlight colors for notes also in the next chord
-export const KEY_COLOR_HIGHLIGHT_NEXT_CHORD_WHITE = '#90CDF4'; // A lighter blue (e.g., Tailwind blue-300)
-export const KEY_COLOR_HIGHLIGHT_NEXT_CHORD_BLACK = '#4299E1'; // A medium blue (e.g., Tailwind blue-500)
+// Defines the colors for the octave indicator bar. Uses actual color values.
+// Matched to Tailwind v3 default palette where possible for consistency
+export const OCTAVE_BAR_COLOR_VALUES: string[] = [
+  '#f87171', // red-400
+  '#fb923c', // orange-400
+  '#facc15', // amber-400 (Tailwind yellow-400 is very light, amber-400 used)
+  '#a3e635', // lime-400
+  '#4ade80', // green-400
+  '#34d399', // emerald-400
+  '#2dd4bf', // teal-400
+  '#22d3ee', // cyan-400
+  '#38bdf8', // sky-400
+  '#60a5fa', // blue-400
+  '#818cf8', // indigo-400
+  '#a78bfa', // violet-400
+  '#c084fc', // purple-400
+  '#e879f9', // fuchsia-400
+  '#f472b6', // pink-400
+  '#fb7185', // rose-400
+];
+export const OCTAVE_BAR_TEXT_COLOR_VALUE = '#ffffff';
+export const OCTAVE_BAR_DEFAULT_COLOR_VALUE = '#94a3b8'; // slate-400 as a fallback if needed
+
+export const OCTAVE_BAR_WIDTH = 15; // px
 
 
 // Defines the sequence of notes in an octave and if they have a black key after them

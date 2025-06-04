@@ -4,12 +4,12 @@ import { useAppData } from '../../contexts/AppDataContext';
 import { SavedPianoSong, ChordProgressionItem, SavedUniqueChordDefinition, ChordSimplificationOption } from '../../types';
 import Button from '../../components/common/Button';
 import Select from '../../components/common/Select'; // Added import
-import { TrashIcon, BookOpenIcon, ViewGridIcon, ViewListIcon, QueueListIcon, ChevronLeftIcon, ChevronRightIcon } from '../../components/common/Icons';
+import { TrashIcon, BookOpenIcon, ViewGridIcon, ViewListIcon, QueueListIcon, ChevronLeftIcon, ChevronRightIcon, MenuIcon, XMarkIcon } from '../../components/common/Icons';
 import PianoChordVisualizer from '../piano-helper/components/PianoChordVisualizer';
 import SongGridView from './components/SongGridView';
 import SongProgressionView from './components/SongProgressionView';
 import ConfirmationModal from '../../components/common/ConfirmationModal';
-import { generateChordVoicings, normalizeNoteToSharp } from '../piano-helper/pianoHelper.utils';
+import { generateChordVoicings, normalizeNoteToSharp, selectBestTwoOctaveRange } from '../piano-helper/pianoHelper.utils';
 import CollapsibleSection from '../../components/common/CollapsibleSection';
 
 // DisplayableSongChordInfo is mainly for the 'details' tab's PianoChordVisualizer and 'progression' tab
@@ -35,7 +35,7 @@ const SongIndexList: React.FC<SongIndexListProps> = ({ songs, currentSongId, onS
     return null;
   }
   return (
-    <nav aria-label="Song index" className={`bg-card p-2 rounded-lg shadow ${className}`}>
+    <nav aria-label="Song index" className={`p-2 ${className}`}>
       <h3 className="text-md font-semibold text-textPrimary mb-2 px-1">Song Index</h3>
       <ul className="space-y-1">
         {songs.map((song, index) => (
@@ -86,7 +86,7 @@ const TabButton: React.FC<{
 
 const SongbookPage: React.FC = () => {
   const { savedPianoSongs, deleteSavedPianoSong, updateSavedSongChordVoicing, updateSavedSongChordSimplification } = useAppData();
-
+  const [isSongIndexOpen, setIsSongIndexOpen] = useState(true);
   const [confirmDeleteModal, setConfirmDeleteModal] = useState<{ isOpen: boolean, songIdToDelete: string | null, songTitle: string | null }>({ isOpen: false, songIdToDelete: null, songTitle: null });
 
   const sortedSongs = useMemo(() =>
@@ -97,8 +97,6 @@ const SongbookPage: React.FC = () => {
   const [currentSongIndex, setCurrentSongIndex] = useState<number | null>(sortedSongs.length > 0 ? 0 : null);
   const [currentSongViewMode, setCurrentSongViewMode] = useState<SongbookViewMode>('details');
   
-  // This state derives the interactive chord data for the current song.
-  // It's used by "Details" (PianoChordVisualizer) and "Progression" views.
   const interactiveSongChords = useMemo((): Record<string, DisplayableSongChordInfo> => {
     if (currentSongIndex === null || !sortedSongs[currentSongIndex]) {
       return {};
@@ -114,29 +112,28 @@ const SongbookPage: React.FC = () => {
       if (!activeSimplification) {
         console.warn(`Active simplification '${savedChord.selectedSimplificationName}' not found for chord '${savedChord.chordName}' in song '${song.songTitle}'. Defaulting to first valid option.`);
         activeSimplification = savedChord.simplificationOptions.find(opt => opt.allVoicings.length > 0) || 
-                               (savedChord.simplificationOptions[0] ? savedChord.simplificationOptions[0] : { // Absolute fallback if no valid option
+                               (savedChord.simplificationOptions[0] ? savedChord.simplificationOptions[0] : { 
                                   name: `Original (${savedChord.chordName})`,
                                   baseNotes: savedChord.aiSuggestedNotes.map(normalizeNoteToSharp),
-                                  allVoicings: generateChordVoicings(savedChord.chordName, undefined, undefined, savedChord.aiSuggestedNotes.map(normalizeNoteToSharp)).voicings,
+                                  allVoicings: generateChordVoicings(savedChord.aiSuggestedNotes.map(normalizeNoteToSharp)).voicings,
                                   isOriginal: true,
-                               } as ChordSimplificationOption); // Cast to ensure type compatibility if fallback structure is used
+                               } as ChordSimplificationOption); 
       }
-       // Ensure at least one voicing, fallback to base notes if original & empty
+      
       if (activeSimplification.allVoicings.length === 0 && activeSimplification.isOriginal && savedChord.aiSuggestedNotes.length > 0) {
         activeSimplification.allVoicings = [savedChord.aiSuggestedNotes.map(normalizeNoteToSharp)];
       }
       
       let effectiveVoicingIndex = savedChord.selectedVoicingIndex;
       if (activeSimplification.allVoicings.length === 0) {
-         console.error(`No voicings for ${savedChord.chordName} with simplification ${activeSimplification.name}. Displaying empty.`);
-         effectiveVoicingIndex = 0; // Or handle as error state
+         effectiveVoicingIndex = 0; 
       } else if (effectiveVoicingIndex < 0 || effectiveVoicingIndex >= activeSimplification.allVoicings.length) {
         console.warn(`Invalid selectedVoicingIndex (${savedChord.selectedVoicingIndex}) for ${savedChord.chordName}. Defaulting to 0.`);
         effectiveVoicingIndex = 0;
       }
       
       songChordsMap[savedChord.chordName] = {
-        chordName: savedChord.chordName, // Original AI name
+        chordName: savedChord.chordName, 
         activeSimplificationName: activeSimplification.name,
         allPossibleVoicings: activeSimplification.allVoicings,
         currentVoicingIndex: effectiveVoicingIndex,
@@ -153,6 +150,20 @@ const SongbookPage: React.FC = () => {
     }
     return null;
   }, [currentSongIndex, sortedSongs]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) { 
+        setIsSongIndexOpen(false); 
+      } else {
+        setIsSongIndexOpen(true); 
+      }
+    };
+    handleResize(); 
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
 
   useEffect(() => {
     if (currentSongIndex !== null) {
@@ -208,7 +219,6 @@ const SongbookPage: React.FC = () => {
         return;
     }
     updateSavedSongChordSimplification(songId, chordName, newSimplificationName);
-    // No need to update local interactiveSongChords, it will re-derive from AppData change
   };
 
 
@@ -217,6 +227,9 @@ const SongbookPage: React.FC = () => {
     if (newIndex !== -1) {
       setCurrentSongIndex(newIndex);
       setCurrentSongViewMode('details'); 
+      if (window.innerWidth < 768) {
+          setIsSongIndexOpen(false);
+      }
     }
   };
 
@@ -238,20 +251,44 @@ const SongbookPage: React.FC = () => {
   return (
     <div className="p-4 space-y-6 mb-28">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
-        <h1 className="text-2xl font-bold text-textPrimary flex items-center">
-          <BookOpenIcon className="w-7 h-7 mr-2 text-primary" /> My Songbook
-        </h1>
-        {sortedSongs.length > 0 && currentSong && (
-             <Button
-                variant="danger"
-                size="sm"
-                onClick={() => openDeleteConfirm(currentSong.id, currentSong.songTitle || "Untitled Song")}
-                aria-label={`Delete ${currentSong.songTitle || "Untitled Song"}`}
-                leftIcon={<TrashIcon className="w-4 h-4"/>}
+        <div className="flex items-center">
+           <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setIsSongIndexOpen(!isSongIndexOpen)} 
+              className="mr-2 p-2 md:hidden" 
+              aria-label={isSongIndexOpen ? "Close song index" : "Open song index"}
+              aria-expanded={isSongIndexOpen}
+              aria-controls="song-index-collapsible"
             >
-                Delete Current Song
+              {isSongIndexOpen ? <XMarkIcon className="w-5 h-5" /> : <MenuIcon className="w-5 h-5" />}
             </Button>
-        )}
+          <h1 className="text-2xl font-bold text-textPrimary flex items-center">
+            <BookOpenIcon className="w-7 h-7 mr-2 text-primary" /> My Songbook
+          </h1>
+        </div>
+        <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setIsSongIndexOpen(!isSongIndexOpen)} 
+              className="p-2 hidden md:inline-flex" 
+              aria-label={isSongIndexOpen ? "Collapse song index" : "Expand song index"}
+            >
+              {isSongIndexOpen ? <ChevronLeftIcon className="w-5 h-5" /> : <ChevronRightIcon className="w-5 h-5" />}
+            </Button>
+            {sortedSongs.length > 0 && currentSong && (
+                <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => openDeleteConfirm(currentSong.id, currentSong.songTitle || "Untitled Song")}
+                    aria-label={`Delete ${currentSong.songTitle || "Untitled Song"}`}
+                    leftIcon={<TrashIcon className="w-4 h-4"/>}
+                >
+                    Delete Song
+                </Button>
+            )}
+        </div>
       </div>
 
 
@@ -260,137 +297,161 @@ const SongbookPage: React.FC = () => {
           Your songbook is empty. Add songs from the "Piano Chord Helper"!
         </p>
       ) : (
-        <div className="flex flex-col md:flex-row md:gap-4">
-          <div className="w-full md:w-64 lg:w-72 md:flex-shrink-0 mb-4 md:mb-0 order-1 md:order-none md:sticky md:top-4 max-h-72 md:max-h-[calc(100vh-12rem)] overflow-y-auto custom-scrollbar">
-            <SongIndexList
-              songs={sortedSongs}
-              currentSongId={currentSong?.id || null}
-              onSelectSong={handleSongSelectionChange}
-            />
+        <>
+          <div className="md:hidden">
+            <CollapsibleSection 
+              title="Song Index" 
+              initialOpen={isSongIndexOpen} 
+              onToggle={setIsSongIndexOpen}
+            >
+              <SongIndexList
+                songs={sortedSongs}
+                currentSongId={currentSong?.id || null}
+                onSelectSong={handleSongSelectionChange}
+                className="bg-card" 
+              />
+            </CollapsibleSection>
           </div>
 
-          <div className="flex-grow order-2 md:order-none min-w-0">
-            {currentSong ? (
-              <div className="bg-card p-4 rounded-lg shadow space-y-4">
-                <h2 className="text-xl font-semibold text-textPrimary">{currentSong.songTitle || "Untitled Song"}</h2>
-                <div className="text-xs text-textSecondary">
-                    Added: {new Date(currentSong.dateAdded).toLocaleDateString()}
-                    {currentSong.analysisResult.lyricsBy && <span className="ml-2">Lyrics: {currentSong.analysisResult.lyricsBy}</span>}
-                    {currentSong.analysisResult.musicBy && <span className="ml-2">Music: {currentSong.analysisResult.musicBy}</span>}
-                </div>
+          <div className="flex flex-col md:flex-row md:gap-4">
+            <div className={`hidden md:block bg-card rounded-lg shadow transition-all duration-300 ease-in-out overflow-y-auto custom-scrollbar max-h-72 md:max-h-[calc(100vh-12rem)] sticky top-4
+                            ${isSongIndexOpen ? 'w-60 sm:w-64 md:w-72 lg:w-80 xl:w-[26rem] p-2' : 'w-0 p-0 opacity-0 pointer-events-none'}`}>
+                {isSongIndexOpen && (
+                    <SongIndexList
+                        songs={sortedSongs}
+                        currentSongId={currentSong?.id || null}
+                        onSelectSong={handleSongSelectionChange}
+                    />
+                )}
+            </div>
 
-                {currentSong.analysisResult.uniqueChords.length > 0 && (
-                  <div role="tablist" aria-label={`Song views for ${currentSong.songTitle || "Untitled Song"}`} className="flex space-x-1 border-b border-gray-200 dark:border-gray-700 pb-2 mb-3">
-                    <TabButton
-                      label="Details"
-                      icon={<ViewListIcon className="w-4 h-4 sm:w-5 sm:h-5"/>}
-                      isActive={currentSongViewMode === 'details'}
-                      onClick={() => setCurrentSongViewMode('details')}
-                      ariaControls={`song-panel-${currentSong.id}-details`}
-                    />
-                    <TabButton
-                      label="Grid"
-                      icon={<ViewGridIcon className="w-4 h-4 sm:w-5 sm:h-5"/>}
-                      isActive={currentSongViewMode === 'grid'}
-                      onClick={() => setCurrentSongViewMode('grid')}
-                      ariaControls={`song-panel-${currentSong.id}-grid`}
-                    />
-                    <TabButton
-                      label="Progression"
-                      icon={<QueueListIcon className="w-4 h-4 sm:w-5 sm:h-5"/>}
-                      isActive={currentSongViewMode === 'progression'}
-                      onClick={() => setCurrentSongViewMode('progression')}
-                      ariaControls={`song-panel-${currentSong.id}-progression`}
-                    />
+            <div className={`flex-grow min-w-0 transition-all duration-300 ease-in-out ${isSongIndexOpen && 'md:ml-4'}`}>
+              {currentSong ? (
+                <div className="bg-card p-4 rounded-lg shadow space-y-4">
+                  <h2 className="text-xl font-semibold text-textPrimary">{currentSong.songTitle || "Untitled Song"}</h2>
+                  <div className="text-xs text-textSecondary">
+                      Added: {new Date(currentSong.dateAdded).toLocaleDateString()}
+                      {currentSong.analysisResult.lyricsBy && <span className="ml-2">Lyrics: {currentSong.analysisResult.lyricsBy}</span>}
+                      {currentSong.analysisResult.musicBy && <span className="ml-2">Music: {currentSong.analysisResult.musicBy}</span>}
                   </div>
-                )}
 
-                {currentSong.sourceImageBase64 && currentSong.sourceImageMimeType && (
-                  <CollapsibleSection title="Original Image" initialOpen={false}>
-                    <img
-                      src={`data:${currentSong.sourceImageMimeType};base64,${currentSong.sourceImageBase64}`}
-                      alt={`Sheet music for ${currentSong.songTitle}`}
-                      className="max-w-full max-h-96 rounded border border-gray-300 dark:border-gray-600 mx-auto"
-                    />
-                  </CollapsibleSection>
-                )}
+                  {currentSong.analysisResult.uniqueChords.length > 0 && (
+                    <div role="tablist" aria-label={`Song views for ${currentSong.songTitle || "Untitled Song"}`} className="flex space-x-1 border-b border-gray-200 dark:border-gray-700 pb-2 mb-3">
+                      <TabButton
+                        label="Details"
+                        icon={<ViewListIcon className="w-4 h-4 sm:w-5 sm:h-5"/>}
+                        isActive={currentSongViewMode === 'details'}
+                        onClick={() => setCurrentSongViewMode('details')}
+                        ariaControls={`song-panel-${currentSong.id}-details`}
+                      />
+                      <TabButton
+                        label="Grid"
+                        icon={<ViewGridIcon className="w-4 h-4 sm:w-5 sm:h-5"/>}
+                        isActive={currentSongViewMode === 'grid'}
+                        onClick={() => setCurrentSongViewMode('grid')}
+                        ariaControls={`song-panel-${currentSong.id}-grid`}
+                      />
+                      <TabButton
+                        label="Progression"
+                        icon={<QueueListIcon className="w-4 h-4 sm:w-5 sm:h-5"/>}
+                        isActive={currentSongViewMode === 'progression'}
+                        onClick={() => setCurrentSongViewMode('progression')}
+                        ariaControls={`song-panel-${currentSong.id}-progression`}
+                      />
+                    </div>
+                  )}
 
-                {currentSong.sourceText && (
-                   <CollapsibleSection title="Original Text" initialOpen={false}>
-                    <pre className="text-xs bg-background dark:bg-gray-800 p-2 rounded whitespace-pre-wrap max-h-60 overflow-y-auto">{currentSong.sourceText}</pre>
-                  </CollapsibleSection>
-                )}
+                  {currentSong.sourceImageBase64 && currentSong.sourceImageMimeType && (
+                    <CollapsibleSection title="Original Image" initialOpen={false}>
+                      <img
+                        src={`data:${currentSong.sourceImageMimeType};base64,${currentSong.sourceImageBase64}`}
+                        alt={`Sheet music for ${currentSong.songTitle}`}
+                        className="max-w-full max-h-96 rounded border border-gray-300 dark:border-gray-600 mx-auto"
+                      />
+                    </CollapsibleSection>
+                  )}
 
-                <div id={`song-panel-${currentSong.id}-${currentSongViewMode}`} role="tabpanel">
-                  {currentSongViewMode === 'details' && (
-                    <>
-                      <h4 className="text-sm font-semibold text-textPrimary mt-2 mb-1">Unique Chords (Interactive):</h4>
-                      {Object.values(interactiveSongChords).length > 0 ? (
-                        Object.values(interactiveSongChords).map((chordInfo) => (
-                          <div key={`${chordInfo.chordName}-interactive-${currentSong.id}`} className="p-1 bg-background dark:bg-gray-800 rounded-md mb-1">
-                            <PianoChordVisualizer
-                              chordName={chordInfo.activeSimplificationName} // Show name of current simplification
-                              allVoicings={chordInfo.allPossibleVoicings}
-                              currentVoicingIndex={chordInfo.currentVoicingIndex}
-                              onVoicingChange={(newIndex) => handleSongChordVoicingChange(currentSong!.id, chordInfo.chordName, newIndex)}
-                            />
-                             {chordInfo.simplificationOptions.length > 1 && (
-                                <Select
-                                    options={chordInfo.simplificationOptions.map(opt => ({value: opt.name, label: opt.name}))}
-                                    value={chordInfo.activeSimplificationName}
-                                    onChange={(e) => handleSongChordSimplificationChange(currentSong!.id, chordInfo.chordName, e.target.value)}
-                                    className="text-xs p-1 mt-1 w-full"
-                                    containerClassName="mb-0"
-                                    aria-label={`Simplification for ${chordInfo.chordName}`}
-                                />
-                            )}
+                  {currentSong.sourceText && (
+                    <CollapsibleSection title="Original Text" initialOpen={false}>
+                      <pre className="text-xs bg-background dark:bg-gray-800 p-2 rounded whitespace-pre-wrap max-h-60 overflow-y-auto">{currentSong.sourceText}</pre>
+                    </CollapsibleSection>
+                  )}
+
+                  <div id={`song-panel-${currentSong.id}-${currentSongViewMode}`} role="tabpanel">
+                    {currentSongViewMode === 'details' && (
+                      <>
+                        <h4 className="text-sm font-semibold text-textPrimary mt-2 mb-1">Unique Chords (Interactive):</h4>
+                        {Object.values(interactiveSongChords).length > 0 ? (
+                          Object.values(interactiveSongChords).map((chordInfo) => {
+                            const { startOctave: optimalStartOctave } = selectBestTwoOctaveRange(chordInfo.allPossibleVoicings[chordInfo.currentVoicingIndex] || []);
+                            return (
+                            <div key={`${chordInfo.chordName}-interactive-${currentSong.id}`} className="p-1 bg-background dark:bg-gray-800 rounded-md mb-1">
+                              <PianoChordVisualizer
+                                chordName={chordInfo.activeSimplificationName} 
+                                allVoicings={chordInfo.allPossibleVoicings}
+                                currentVoicingIndex={chordInfo.currentVoicingIndex}
+                                onVoicingChange={(newIndex) => handleSongChordVoicingChange(currentSong!.id, chordInfo.chordName, newIndex)}
+                                numOctavesToDisplay={2} 
+                                fixedStartOctave={optimalStartOctave} 
+                              />
+                              {chordInfo.simplificationOptions.length > 1 && (
+                                  <Select
+                                      options={chordInfo.simplificationOptions.map(opt => ({value: opt.name, label: opt.name}))}
+                                      value={chordInfo.activeSimplificationName}
+                                      onChange={(e) => handleSongChordSimplificationChange(currentSong!.id, chordInfo.chordName, e.target.value)}
+                                      className="text-xs p-1 mt-1 w-full"
+                                      containerClassName="mb-0"
+                                      aria-label={`Simplification for ${chordInfo.chordName}`}
+                                  />
+                              )}
+                            </div>
+                           )})
+                        ) : (
+                          <p className="text-sm text-textSecondary italic">No unique chords were saved for this song.</p>
+                        )}
+                        {currentSong.analysisResult.chordProgression && currentSong.analysisResult.chordProgression.length > 0 && (
+                          <div className="mt-3">
+                            <h4 className="text-sm font-semibold text-textPrimary mb-1">Chord Progression Summary:</h4>
+                            <div className="mt-1 p-2 bg-background dark:bg-gray-800 rounded-md max-h-48 overflow-y-auto">
+                              {currentSong.analysisResult.chordProgression.map((progItem: ChordProgressionItem, index: number) => (
+                                <p key={`prog-summary-${currentSong!.id}-${index}`} className="text-xs text-textPrimary mb-0.5">
+                                  <span className="font-semibold">{progItem.chordName}</span>
+                                  {progItem.originalContext && <span className="text-xxs text-textSecondary italic ml-1">"{progItem.originalContext}"</span>}
+                                </p>
+                              ))}
+                            </div>
                           </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-textSecondary italic">No unique chords were saved for this song.</p>
-                      )}
-                      {currentSong.analysisResult.chordProgression && currentSong.analysisResult.chordProgression.length > 0 && (
-                        <div className="mt-3">
-                          <h4 className="text-sm font-semibold text-textPrimary mb-1">Chord Progression Summary:</h4>
-                          <div className="mt-1 p-2 bg-background dark:bg-gray-800 rounded-md max-h-48 overflow-y-auto">
-                            {currentSong.analysisResult.chordProgression.map((progItem: ChordProgressionItem, index: number) => (
-                              <p key={`prog-summary-${currentSong!.id}-${index}`} className="text-xs text-textPrimary mb-0.5">
-                                <span className="font-semibold">{progItem.chordName}</span>
-                                {progItem.originalContext && <span className="text-xxs text-textSecondary italic ml-1">"{progItem.originalContext}"</span>}
-                              </p>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
+                        )}
+                      </>
+                    )}
 
-                  {currentSongViewMode === 'grid' && (
-                    <SongGridView
-                      songId={currentSong.id}
-                      uniqueChordsData={currentSong.analysisResult.uniqueChords} // Pass full SavedUniqueChordDefinition
-                      onVoicingChange={handleSongChordVoicingChange}
-                      onSimplificationChange={handleSongChordSimplificationChange} // Pass new handler
-                      songTitle={currentSong.songTitle}
-                     />
-                  )}
+                    {currentSongViewMode === 'grid' && (
+                      <SongGridView
+                        songId={currentSong.id}
+                        uniqueChordsData={currentSong.analysisResult.uniqueChords} 
+                        onVoicingChange={handleSongChordVoicingChange}
+                        onSimplificationChange={handleSongChordSimplificationChange} 
+                        songTitle={currentSong.songTitle}
+                      />
+                    )}
 
-                  {currentSongViewMode === 'progression' && (
-                    <SongProgressionView
-                      song={currentSong}
-                      interactiveChords={interactiveSongChords} // Progression view uses the derived interactive state
-                      onVoicingChange={(chordName, newIndex) => handleSongChordVoicingChange(currentSong!.id, chordName, newIndex)}
-                    />
-                  )}
+                    {currentSongViewMode === 'progression' && (
+                      <SongProgressionView
+                        song={currentSong}
+                        interactiveChords={interactiveSongChords} 
+                        onVoicingChange={(chordName, newIndex) => handleSongChordVoicingChange(currentSong!.id, chordName, newIndex)}
+                      />
+                    )}
+                  </div>
                 </div>
-              </div>
-            ) : (
-                 <p className="text-center text-textSecondary py-10">
-                    Select a song from the index to view its details.
-                 </p>
-            )}
+              ) : (
+                  <p className="text-center text-textSecondary py-10">
+                      Select a song from the index to view its details.
+                  </p>
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {confirmDeleteModal.isOpen && (
@@ -405,7 +466,7 @@ const SongbookPage: React.FC = () => {
         />
       )}
 
-      {sortedSongs.length > 1 && (
+      {sortedSongs.length > 1 && currentSong && (
         <div className="fixed bottom-16 left-0 right-0 p-2 bg-card/80 dark:bg-gray-700/80 backdrop-blur-sm border-t border-gray-200 dark:border-gray-600 flex justify-center items-center space-x-4 z-10">
             <Button onClick={handlePreviousSong} leftIcon={<ChevronLeftIcon className="w-5 h-5"/>} aria-label="Previous Song">
                 Previous
