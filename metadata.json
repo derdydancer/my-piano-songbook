@@ -1,8 +1,8 @@
+
 {
-  "name": "My Utilities Hub",
-  "description": "A personal utility application for tracking weight, Disney movie collections, and managing gift ideas with AI assistance.",
+  "name": "My Piano Songbook",
+  "description": "A personal utility application for piano chord analysis and managing a songbook.",
   "requestFramePermissions": [
-    "microphone",
     "camera"
   ],
   "prompt": ""

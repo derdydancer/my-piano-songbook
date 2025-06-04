@@ -1,7 +1,7 @@
 
 # Feature Organization and Development Guide
 
-This document outlines the project structure for "My Utilities Hub" and provides a guide for adding new utilities (features).
+This document outlines the project structure for "My Piano Songbook" and provides a guide for adding new utilities (features), though the app is now focused.
 
 ## Table of Contents
 1. [Overall Project Structure](#overall-project-structure)
@@ -10,8 +10,7 @@ This document outlines the project structure for "My Utilities Hub" and provides
     - [Definition of a Common Component](#definition-of-a-common-component)
     - [Documentation Strategy for Common Components](#documentation-strategy-for-common-components)
     - [Maintenance Guideline for Common Components](#maintenance-guideline-for-common-components)
-4. [Adding a New Utility](#adding-a-new-utility)
-    - [Example: Adding a "Super Counter" Utility](#example-adding-a-super-counter-utility)
+4. [Adding a New Utility (Conceptual)](#adding-a-new-utility-conceptual)
 5. [Loading Sample Data (for AI Studio/Development)](#loading-sample-data-for-ai-studiodevelopment)
 
 
@@ -26,13 +25,14 @@ The application is organized to separate concerns, making it easier to manage an
 -   **`contexts/`**: For React Context API providers.
     -   `AppDataContext.tsx`: Manages global application state by aggregating data and actions from individual feature modules. Handles data persistence, migration, and global actions (export/import, utility settings).
     -   `ThemeContext.tsx`: Manages application theme (light/dark).
--   **`features/`**: Core directory for distinct application utilities. Each subdirectory represents a utility (e.g., `weight-tracker/`, `gift-assistant/`, `docs-viewer/`, `piano-helper/`, `songbook/`). See [Feature Directory Structure](#feature-directory-structure) for details.
+-   **`features/`**: Core directory for distinct application utilities. Now primarily `piano-helper/` and `songbook/`.
+    -   `features/settings/`: Contains the settings page component.
 -   **`hooks/`**: Custom React Hooks (e.g., `useLocalStorage.ts`).
 -   **`services/`**: Modules for external APIs (e.g., `geminiService.ts`).
--   **`types.ts`**: Global TypeScript type definitions.
--   **`constants.ts`**: Truly global application-wide constants (e.g., `UTILITY_IDS`, `DEFAULT_UTILITY_SETTINGS`). Feature-specific constants are located within their feature directory.
--   **`sampleData.ts`**: Aggregates sample data slices from individual feature modules to provide comprehensive sample data for development and testing (e.g., `AI_STUDIO_SAMPLE_DATA`).
--   **`utils/`**: General utility functions (e.g., `workoutHelper.ts`, `workoutOptimizer.ts`).
+-   **`types.ts`**: Global TypeScript type definitions, now focused on Piano/Songbook and core app types.
+-   **`constants.ts`**: Truly global application-wide constants (e.g., `UTILITY_IDS`, `DEFAULT_UTILITY_SETTINGS`), now focused on Piano/Songbook and Settings. Feature-specific constants are located within their feature directory.
+-   **`sampleData.ts`**: Aggregates sample data slices from individual feature modules to provide comprehensive sample data for development and testing (e.g., `AI_STUDIO_SAMPLE_DATA`), now focused on Piano/Songbook.
+-   **`utils/`**: General utility functions (e.g., `pianoHelper.utils.ts` is now inside `features/piano-helper/`).
 -   **`App.tsx`**, **`index.tsx`**, **`index.html`**, **`metadata.json`**: Standard project files.
 -   **`docs/`**: Contains Markdown documentation files for the project.
     -   `docs/changes/`: Subdirectory for changelog or specific update analysis documents.
@@ -40,18 +40,17 @@ The application is organized to separate concerns, making it easier to manage an
 
 ## Feature Directory Structure
 
-Each utility resides in its own subdirectory within `features/`. For example, `features/weight-tracker/`. A typical feature directory now includes:
+Each utility resides in its own subdirectory within `features/`. For example, `features/piano-helper/`. A typical feature directory now includes:
 
--   **`FeatureNamePage.tsx`**: The main React component for the feature's UI (e.g., `WeightTrackerPage.tsx`).
--   **`utilityName.constants.ts`**: Constants that are specific to this utility (e.g., `disneyCollection.constants.ts` holds `DISNEY_ANIMATED_CLASSICS`; `docsViewer.constants.ts` lists available documents).
+-   **`FeatureNamePage.tsx`**: The main React component for the feature's UI (e.g., `PianoHelperPage.tsx`).
+-   **`utilityName.constants.ts`**: Constants that are specific to this utility (e.g., `pianoHelper.constants.ts`).
 -   **`utilityName.data.ts`**: Manages the data logic for this utility. It typically exports:
-    *   `initialUtilityNameData`: An object representing the initial state slice for this utility (e.g., `{ weightEntries: [] }`). Utilities like `Piano Helper` will include `savedPianoSongs: []` here.
-    *   `createUtilityNameActions(setAppData, getAppData)`: A function that returns an object of action functions specific to this utility (e.g., `addWeightEntry`, `addSavedPianoSong`). These actions are then integrated into the global `AppDataContext`.
+    *   `initialUtilityNameData`: An object representing the initial state slice for this utility (e.g., `{ savedPianoSongs: [] }`).
+    *   `createUtilityNameActions(setAppData, getAppData)`: A function that returns an object of action functions specific to this utility (e.g., `addSavedPianoSong`). These actions are then integrated into the global `AppDataContext`.
     *   `UtilityNameActions` (type): The TypeScript type for the actions object.
--   **`utilityName.sample.ts`**: Contains the sample data specific to this utility, which is then aggregated by the root `sampleData.ts`. For utilities like `Songbook`, this would include `sampleSavedPianoSongs`.
+-   **`utilityName.sample.ts`**: Contains the sample data specific to this utility, which is then aggregated by the root `sampleData.ts`. For Piano Helper/Songbook, this includes `sampleSavedPianoSongs`.
 -   **`components/`** (optional): Subdirectory for React components specific to this feature (e.g., `features/piano-helper/components/PianoChordVisualizer.tsx`).
--   **`hooks/`** (optional): Custom React Hooks used exclusively by this feature.
--   **`utils/`** (optional): Utility functions relevant only to this feature.
+-   **`utils/`** (optional but common): Utility functions relevant only to this feature (e.g., `features/piano-helper/pianoHelper.utils.ts`).
 -   **`types.ts`** (optional, prefer root `types.ts`): Feature-specific types. If types are broadly applicable or part of the core `AppData`, they belong in the root `types.ts`.
 
 This modular structure ensures that each feature's core logic (constants, initial data, actions, sample data) is co-located, making features easier to understand, develop, and maintain independently. The `AppDataContext` acts as an orchestrator, bringing these pieces together.
@@ -76,7 +75,7 @@ To track the usage of common components and mitigate the risk of unintended side
 -   **JSDoc `@remarks` Block:** Each component file in `components/common/` (and potentially complex root components like `Modal.tsx`) must include a JSDoc block at the top of its definition.
 -   **Usage Listing:** This JSDoc block should contain an `@remarks` tag followed by a list indicating which features or significant parts of the application currently use this component and for what general purpose.
 
-**Example for `Button.tsx`:**
+**Example for `Button.tsx` (Updated for focused app):**
 ```typescript
 /**
  * A generic button component for user interactions, supporting different
@@ -84,14 +83,12 @@ To track the usage of common components and mitigate the risk of unintended side
  *
  * @remarks
  * Used by:
- * - Weight Tracker: Add Weight, Edit, Delete entry buttons; form actions.
- * - Disney Collection: Mark as owned/unowned buttons; filter toggles.
- * - Gift Assistant: New List, Add Gift, AI action buttons; modal actions; list item actions; copy list.
- * - Settings: Export/Import data, Load Sample Data, Theme toggle, Save Plate inventory, Utility toggles.
- * - Workout Tracker: Start workout, set completion (Pass/Fail/Skip), weight adjustment buttons, timer controls, modal actions.
  * - Piano Chord Helper: Generate Chords, Upload Image, Take Photo buttons, Save to Songbook.
- * - Songbook: Delete song button (within CollapsibleSection header).
+ * - Songbook: Delete song button, view mode toggles, navigation buttons.
+ * - Settings: Export/Import data, Load Sample Data, Theme toggle, Utility toggles.
  * - Various Modals: Standard action buttons (OK, Cancel, Confirm).
+ * - BottomNav: More menu button (internally styled).
+ * - CollapsibleSection: Toggle button (internally styled).
  */
 const Button: React.FC<ButtonProps> = ({
   // ...component implementation
@@ -110,132 +107,20 @@ Before making any potentially breaking changes to a component in `components/com
 
 Adhering to these guidelines will help maintain the stability and reliability of shared UI elements across the application.
 
-## Adding a New Utility
+## Adding a New Utility (Conceptual)
 
-To add a new utility to the application, follow these steps:
+While the app is now focused, if a new, related utility were to be added, the general process would be:
 
-### Example: Adding a "Super Counter" Utility
-
-Let's say we want to add a simple "Super Counter" utility that just increments and decrements a number.
-
-1.  **Create Feature Directory:**
-    Create a new directory: `features/super-counter/`
-
-2.  **Define Constants (`superCounter.constants.ts`):**
-    (For this simple example, we might not have specific constants, but if we did, e.g., `DEFAULT_COUNTER_STEP = 1;`, they'd go here.)
-    ```typescript
-    // features/super-counter/superCounter.constants.ts
-    // export const DEFAULT_START_VALUE = 0; // Example
-    ```
-
-3.  **Define Data Logic (`superCounter.data.ts`):**
-    ```typescript
-    // features/super-counter/superCounter.data.ts
-    import { AppData } from '../../types'; // Assuming AppData is updated
-
-    // Part of AppData relevant to this utility
-    export const initialSuperCounterData = {
-      superCounterValue: 0, // Default defined in AppData or here
-    };
-
-    // Define Actions Type
-    export type SuperCounterActions = ReturnType<typeof createSuperCounterActions>;
-
-    export const createSuperCounterActions = (
-      setAppData: React.Dispatch<React.SetStateAction<AppData>>,
-      getAppData: () => AppData // If needed to read current state
-    ) => ({
-      incrementSuperCounter: (amount: number = 1) => {
-        setAppData(prev => ({
-          ...prev,
-          superCounterValue: (prev.superCounterValue || 0) + amount,
-        }));
-      },
-      decrementSuperCounter: (amount: number = 1) => {
-        setAppData(prev => ({
-          ...prev,
-          superCounterValue: (prev.superCounterValue || 0) - amount,
-        }));
-      },
-      resetSuperCounter: () => {
-        setAppData(prev => ({
-          ...prev,
-          superCounterValue: initialSuperCounterData.superCounterValue,
-        }));
-      },
-    });
-    ```
-
-4.  **Define Sample Data (`superCounter.sample.ts`):**
-    ```typescript
-    // features/super-counter/superCounter.sample.ts
-    export const sampleSuperCounterValue = {
-      superCounterValue: 42,
-    };
-    ```
-
-5.  **Create Main Page Component (`SuperCounterPage.tsx`):**
-    ```typescript
-    // features/super-counter/SuperCounterPage.tsx
-    import React from 'react';
-    import Button from '../../components/common/Button';
-    import { useAppData } from '../../contexts/AppDataContext';
-
-    const SuperCounterPage: React.FC = () => {
-      const { superCounterValue, incrementSuperCounter, decrementSuperCounter, resetSuperCounter } = useAppData();
-
-      return (
-        <div className="p-4 space-y-4">
-          <h1 className="text-2xl font-bold text-textPrimary">Super Counter</h1>
-          <p className="text-lg text-textPrimary">Current Count: {superCounterValue || 0}</p>
-          <div className="flex space-x-2">
-            <Button onClick={() => incrementSuperCounter(1)}>Increment</Button>
-            <Button onClick={() => decrementSuperCounter(1)} variant="secondary">Decrement</Button>
-            <Button onClick={resetSuperCounter} variant="ghost">Reset</Button>
-          </div>
-        </div>
-      );
-    };
-    export default SuperCounterPage;
-    ```
-
-6.  **Update Global Types and Constants:**
-    *   **`types.ts`**:
-        *   Add `'superCounter'` to `UtilityId`: `export type UtilityId = ... | 'superCounter';`
-        *   Update `AppData` interface: `interface AppData { ...; superCounterValue: number; }`
-    *   **`constants.ts`**:
-        *   Add to `UTILITY_IDS`: `SUPER_COUNTER: 'superCounter' as UtilityId,`
-        *   Add to `DEFAULT_UTILITY_SETTINGS`: `{ id: UTILITY_IDS.SUPER_COUNTER as UtilityId, name: "Super Counter", enabled: true, showInMoreMenu: false },`
-
-7.  **Update Root `sampleData.ts`:**
-    *   Import and include the sample data:
-        ```typescript
-        // sampleData.ts
-        import { sampleSuperCounterValue } from './features/super-counter/superCounter.sample';
-        // ...
-        export const AI_STUDIO_SAMPLE_DATA: AppData = {
-          // ... other sample data slices
-          ...sampleSuperCounterValue,
-          // ...
-        };
-        ```
-
-8.  **Update `AppDataContext.tsx`:**
-    *   Import `initialSuperCounterData`, `createSuperCounterActions`, and `SuperCounterActions` from `features/super-counter/superCounter.data.ts`.
-    *   Add `...initialSuperCounterData` to the spread that forms `initialAppData`.
-    *   Add `SuperCounterActions` to the `AppDataContextType` union.
-    *   Instantiate actions: `const superCounterActions = createSuperCounterActions(setAppData, getAppData);`
-    *   Spread `...superCounterActions` into the `contextValue`.
-    *   Ensure the migration `useEffect` in `AppDataContext.tsx` correctly initializes `superCounterValue` if it's undefined in existing user data.
-
-9.  **Configure Routing in `App.tsx`:**
-    *   Import `SuperCounterPage`.
-    *   Add Route: `<Route path="/super-counter" element={<ProtectedRoute utilityId={UTILITY_IDS.SUPER_COUNTER as UtilityId} element={<SuperCounterPage />} />} />`
-    *   Update `getDefaultRoute` if necessary.
-
-10. **Add to Navigation (`BottomNav.tsx`):**
-    *   Create an icon (e.g., `PlusMinusIcon`) in `components/common/Icons.tsx`.
-    *   Import it and add a `NavItemDef` to `allNavItems`.
+1.  **Create Feature Directory:** `features/new-utility/`
+2.  **Define Constants (`newUtility.constants.ts`):** Store utility-specific constants.
+3.  **Define Data Logic (`newUtility.data.ts`):** Create `initialNewUtilityData`, `createNewUtilityActions`, and `NewUtilityActions` type.
+4.  **Define Sample Data (`newUtility.sample.ts`):** Provide sample data for this utility.
+5.  **Create Main Page Component (`NewUtilityPage.tsx`):** Implement the UI.
+6.  **Update Global Types (`types.ts`) and Constants (`constants.ts`):** Add new `UtilityId`, update `AppData`, and `DEFAULT_UTILITY_SETTINGS`.
+7.  **Update Root `sampleData.ts`:** Aggregate the new sample data.
+8.  **Update `AppDataContext.tsx`:** Integrate new initial data, actions, and migration logic.
+9.  **Configure Routing in `App.tsx`**.
+10. **Add to Navigation (`BottomNav.tsx`)**.
 
 This structured approach ensures new features are well-integrated and maintain the overall organization of the project.
 
