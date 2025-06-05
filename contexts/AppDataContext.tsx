@@ -1,8 +1,7 @@
-
 import React, { createContext, useContext, ReactNode, useCallback, useEffect } from 'react';
 import useLocalStorage from '../hooks/useLocalStorage';
-import { AppData, UtilitySetting, UtilityId, SavedPianoSong, SavedUniqueChordDefinition, ChordSimplificationOption } from '../types';
-import { DEFAULT_UTILITY_SETTINGS, UTILITY_IDS } from '../constants'; 
+import { AppData, UtilitySetting, UtilityId, SavedPianoSong, SavedUniqueChordDefinition, ChordSimplificationOption, PlayAlongSettings } from '../types';
+import { DEFAULT_UTILITY_SETTINGS, UTILITY_IDS, DEFAULT_PLAY_ALONG_SETTINGS } from '../constants'; 
 import { AI_STUDIO_SAMPLE_DATA } from '../sampleData'; 
 
 // Import initial data slices and action creators from utility-specific modules
@@ -21,6 +20,10 @@ interface AppDataCoreContextType {
   updateUtilitySetting: (utilityId: UtilityId, updates: Partial<UtilitySetting>) => void;
   getUtilitySetting: (utilityId: UtilityId) => UtilitySetting | undefined;
   savedPianoSongs: SavedPianoSong[];
+  playAlongSettings: PlayAlongSettings;
+  updatePlayAlongSetting: <K extends keyof PlayAlongSettings>(key: K, value: PlayAlongSettings[K]) => void;
+  updateMultiplePlayAlongSettings: (settings: Partial<PlayAlongSettings>) => void;
+  resetPlayAlongSettings: () => void;
 }
 
 // Combine core context type with all utility-specific action types
@@ -35,6 +38,7 @@ const initialAppData: AppData = {
   ...initialPianoHelperData, 
   ...initialSongbookData, 
   utilitySettings: DEFAULT_UTILITY_SETTINGS,
+  playAlongSettings: DEFAULT_PLAY_ALONG_SETTINGS,
 };
 
 
@@ -46,7 +50,7 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         if (item.startsWith('{') && item.endsWith('}')) {
            const parsedData = JSON.parse(item) as AppData;
            // Simplified check for core data
-           if (parsedData.utilitySettings && parsedData.savedPianoSongs !== undefined) { 
+           if (parsedData.utilitySettings && parsedData.savedPianoSongs !== undefined && parsedData.playAlongSettings !== undefined) { 
              return parsedData;
            }
         }
@@ -114,6 +118,37 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
         }
     }
     
+    // PlayAlong Settings Migration/Initialization
+    if (!tempAppData.playAlongSettings) {
+        tempAppData.playAlongSettings = DEFAULT_PLAY_ALONG_SETTINGS;
+        dataChanged = true;
+    } else {
+        let playAlongSettingsChanged = false;
+        const mergedPlayAlongSettings: PlayAlongSettings = { ...DEFAULT_PLAY_ALONG_SETTINGS, ...tempAppData.playAlongSettings };
+        
+        // Check if any default key is missing or if new keys were added to default
+        for (const key in DEFAULT_PLAY_ALONG_SETTINGS) {
+            if (!(key in tempAppData.playAlongSettings) || 
+                (typeof (DEFAULT_PLAY_ALONG_SETTINGS as any)[key] !== typeof (tempAppData.playAlongSettings as any)[key] && 
+                 (tempAppData.playAlongSettings as any)[key] === undefined)) {
+                playAlongSettingsChanged = true;
+                break;
+            }
+        }
+        // Check if any key was removed from default that exists in current
+         for (const key in tempAppData.playAlongSettings) {
+            if (!(key in DEFAULT_PLAY_ALONG_SETTINGS)) {
+                playAlongSettingsChanged = true;
+                break;
+            }
+        }
+
+        if (playAlongSettingsChanged) {
+            tempAppData.playAlongSettings = mergedPlayAlongSettings;
+            dataChanged = true;
+        }
+    }
+
     // Piano Songs Migration/Initialization
     if (tempAppData.savedPianoSongs === undefined) {
       tempAppData.savedPianoSongs = initialPianoHelperData.savedPianoSongs;
@@ -242,12 +277,12 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
   const exportData = useCallback((): AppData => appData, [appData]);
 
   const importData = useCallback((data: AppData): boolean => {
-    if (data && data.utilitySettings !== undefined && data.savedPianoSongs !== undefined) {
+    if (data && data.utilitySettings !== undefined && data.savedPianoSongs !== undefined && data.playAlongSettings !== undefined) {
       const completeImportData = { ...initialAppData, ...data };
       setAppData(completeImportData); 
       return true;
     } else {
-      console.error("Import failed: Invalid data format for Piano/Songbook app.", data);
+      console.error("Import failed: Invalid data format. Essential properties might be missing.", data);
       return false;
     }
   }, [setAppData]);
@@ -276,6 +311,34 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     return appData.utilitySettings.find(setting => setting.id === utilityId);
   }, [appData.utilitySettings]);
 
+  const updatePlayAlongSetting = useCallback(<K extends keyof PlayAlongSettings>(key: K, value: PlayAlongSettings[K]) => {
+    setAppData(prev => ({
+      ...prev,
+      playAlongSettings: {
+        ...prev.playAlongSettings,
+        [key]: value,
+      },
+    }));
+  }, [setAppData]);
+
+  const updateMultiplePlayAlongSettings = useCallback((settings: Partial<PlayAlongSettings>) => {
+    setAppData(prev => ({
+      ...prev,
+      playAlongSettings: {
+        ...prev.playAlongSettings,
+        ...settings,
+      },
+    }));
+  }, [setAppData]);
+
+  const resetPlayAlongSettings = useCallback(() => {
+    setAppData(prev => ({
+      ...prev,
+      playAlongSettings: DEFAULT_PLAY_ALONG_SETTINGS,
+    }));
+  }, [setAppData]);
+
+
   const getAppDataForActions = useCallback((): AppData => {
     return appData; 
   }, [appData]);
@@ -290,7 +353,11 @@ export const AppDataProvider: React.FC<{ children: ReactNode }> = ({ children })
     utilitySettings: appData.utilitySettings,
     updateUtilitySetting,
     getUtilitySetting,
-    savedPianoSongs: appData.savedPianoSongs, 
+    savedPianoSongs: appData.savedPianoSongs,
+    playAlongSettings: appData.playAlongSettings,
+    updatePlayAlongSetting,
+    updateMultiplePlayAlongSettings,
+    resetPlayAlongSettings,
     ...pianoHelperActions,
     ...songbookActions,
   };

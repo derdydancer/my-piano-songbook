@@ -1,4 +1,3 @@
-
 export interface SinglePersonGiftSuggestion {
   personName: string; 
   isNewPersonCandidate?: boolean; 
@@ -80,9 +79,29 @@ export interface SavedPianoSong {
   dateAdded: string; 
 }
 
+export interface PlayAlongSettings {
+  lyricsPosition: 'top' | 'bottom';
+  baseWhiteKeyWidth: number;
+  animationSpeedFactor: number;
+  laneHighlightColor: string; // e.g., 'rgba(59, 130, 246, 0.7)'
+  playedChordHighlightColor: string; // e.g., 'rgba(59, 130, 246, 0.85)'
+  noteDotColor: string; // e.g., 'rgba(59, 130, 246, 1.0)'
+  whiteKeyColor: string; // e.g., '#FFFFFF'
+  blackKeyColor: string; // e.g., '#282c34'
+  keyStrokeColor: string; // e.g., '#A0AEC0'
+  showPlayedChordName: boolean;
+  playedChordNameColor: string;
+  playedChordNameFontSize: number;
+  showUpcomingChordName: boolean;
+  upcomingChordNameColor: string;
+  upcomingChordNameFontSize: number;
+  noteDotRadius: number;
+}
+
 export interface AppData {
   utilitySettings: UtilitySetting[];
   savedPianoSongs: SavedPianoSong[];
+  playAlongSettings: PlayAlongSettings; // Added new settings
 }
 
 export type MoreMenuPosition = 'bottom' | 'top';

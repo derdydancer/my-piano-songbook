@@ -4,10 +4,11 @@ import { useAppData } from '../../contexts/AppDataContext';
 import { SavedPianoSong, ChordProgressionItem, SavedUniqueChordDefinition, ChordSimplificationOption } from '../../types';
 import Button from '../../components/common/Button';
 import Select from '../../components/common/Select'; // Added import
-import { TrashIcon, BookOpenIcon, ViewGridIcon, ViewListIcon, QueueListIcon, ChevronLeftIcon, ChevronRightIcon, MenuIcon, XMarkIcon } from '../../components/common/Icons';
+import { TrashIcon, BookOpenIcon, ViewGridIcon, ViewListIcon, QueueListIcon, ChevronLeftIcon, ChevronRightIcon, MenuIcon, XMarkIcon, PlayIcon } from '../../components/common/Icons';
 import PianoChordVisualizer from '../piano-helper/components/PianoChordVisualizer';
 import SongGridView from './components/SongGridView';
 import SongProgressionView from './components/SongProgressionView';
+import PlayAlongView from './components/PlayAlongView'; // Import the new PlayAlongView
 import ConfirmationModal from '../../components/common/ConfirmationModal';
 import { generateChordVoicings, normalizeNoteToSharp, selectBestTwoOctaveRange } from '../piano-helper/pianoHelper.utils';
 import CollapsibleSection from '../../components/common/CollapsibleSection';
@@ -21,7 +22,7 @@ export interface DisplayableSongChordInfo {
   simplificationOptions: ChordSimplificationOption[]; // All available simplification options
 }
 
-type SongbookViewMode = 'details' | 'grid' | 'progression';
+type SongbookViewMode = 'details' | 'grid' | 'progression' | 'playAlong'; // Added 'playAlong'
 
 interface SongIndexListProps {
   songs: SavedPianoSong[];
@@ -65,19 +66,22 @@ const TabButton: React.FC<{
   isActive: boolean;
   onClick: () => void;
   ariaControls?: string;
-}> = ({ label, icon, isActive, onClick, ariaControls }) => (
+  disabled?: boolean;
+}> = ({ label, icon, isActive, onClick, ariaControls, disabled = false }) => (
   <Button
     variant={isActive ? 'primary' : 'ghost'}
     size="sm"
     onClick={onClick}
     leftIcon={icon}
     className={`
-      rounded-md px-3 py-1.5 text-xs sm:text-sm
+      rounded-md px-3 py-1.5 text-xs sm:text-sm flex-1 sm:flex-initial justify-center
       ${isActive ? 'shadow-sm dark:!text-blue-950' : 'text-textSecondary hover:bg-gray-200 dark:hover:bg-gray-700'}
+      ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
     `}
     aria-selected={isActive}
     aria-controls={ariaControls}
     role="tab"
+    disabled={disabled}
   >
     {label}
   </Button>
@@ -227,7 +231,7 @@ const SongbookPage: React.FC = () => {
     if (newIndex !== -1) {
       setCurrentSongIndex(newIndex);
       setCurrentSongViewMode('details'); 
-      if (window.innerWidth < 768) {
+      if (window.innerWidth < 768 && currentSongViewMode !== 'playAlong') { // Keep song index closed on mobile unless playAlong
           setIsSongIndexOpen(false);
       }
     }
@@ -247,6 +251,16 @@ const SongbookPage: React.FC = () => {
     }
   };
 
+  const hasProgression = currentSong?.analysisResult?.chordProgression && currentSong.analysisResult.chordProgression.length > 0;
+  
+  const handleExitPlayAlong = () => {
+    setCurrentSongViewMode('details');
+  };
+
+  // If PlayAlongView is active, we render it exclusively and it handles its own full-screen layout.
+  if (currentSongViewMode === 'playAlong' && currentSong && hasProgression) {
+    return <PlayAlongView song={currentSong} interactiveChords={interactiveSongChords} onExit={handleExitPlayAlong} />;
+  }
 
   return (
     <div className="p-4 space-y-6 mb-28">
@@ -336,7 +350,7 @@ const SongbookPage: React.FC = () => {
                   </div>
 
                   {currentSong.analysisResult.uniqueChords.length > 0 && (
-                    <div role="tablist" aria-label={`Song views for ${currentSong.songTitle || "Untitled Song"}`} className="flex space-x-1 border-b border-gray-200 dark:border-gray-700 pb-2 mb-3">
+                    <div role="tablist" aria-label={`Song views for ${currentSong.songTitle || "Untitled Song"}`} className="flex flex-wrap space-x-1 border-b border-gray-200 dark:border-gray-700 pb-2 mb-3">
                       <TabButton
                         label="Details"
                         icon={<ViewListIcon className="w-4 h-4 sm:w-5 sm:h-5"/>}
@@ -357,6 +371,15 @@ const SongbookPage: React.FC = () => {
                         isActive={currentSongViewMode === 'progression'}
                         onClick={() => setCurrentSongViewMode('progression')}
                         ariaControls={`song-panel-${currentSong.id}-progression`}
+                        disabled={!hasProgression}
+                      />
+                       <TabButton
+                        label="Play Along"
+                        icon={<PlayIcon className="w-4 h-4 sm:w-5 sm:h-5"/>}
+                        isActive={currentSongViewMode === 'playAlong'}
+                        onClick={() => setCurrentSongViewMode('playAlong')}
+                        ariaControls={`song-panel-${currentSong.id}-playAlong`}
+                        disabled={!hasProgression}
                       />
                     </div>
                   )}
@@ -377,7 +400,7 @@ const SongbookPage: React.FC = () => {
                     </CollapsibleSection>
                   )}
 
-                  <div id={`song-panel-${currentSong.id}-${currentSongViewMode}`} role="tabpanel">
+                  <div id={`song-panel-${currentSong.id}-${currentSongViewMode}`} role="tabpanel" aria-labelledby={`tab-${currentSong.id}-${currentSongViewMode}`}>
                     {currentSongViewMode === 'details' && (
                       <>
                         <h4 className="text-sm font-semibold text-textPrimary mt-2 mb-1">Unique Chords (Interactive):</h4>
@@ -435,13 +458,17 @@ const SongbookPage: React.FC = () => {
                       />
                     )}
 
-                    {currentSongViewMode === 'progression' && (
+                    {currentSongViewMode === 'progression' && hasProgression && (
                       <SongProgressionView
                         song={currentSong}
                         interactiveChords={interactiveSongChords} 
                         onVoicingChange={(chordName, newIndex) => handleSongChordVoicingChange(currentSong!.id, chordName, newIndex)}
                       />
                     )}
+                   
+                     {((currentSongViewMode === 'progression' || currentSongViewMode === 'playAlong') && !hasProgression) && (
+                         <p className="text-textSecondary text-center py-6">This song does not have a chord progression. Add one via the Piano Chord Helper or edit the song data.</p>
+                     )}
                   </div>
                 </div>
               ) : (
