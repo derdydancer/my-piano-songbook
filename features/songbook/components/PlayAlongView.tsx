@@ -6,25 +6,26 @@ import Button from '../../../components/common/Button';
 import { PlayIcon as ReplayIcon, ChevronRightIcon, XMarkIcon, SettingsIcon } from '../../../components/common/Icons';
 import { useAppData } from '../../../contexts/AppDataContext';
 import PlayAlongSettingsPanel from './PlayAlongSettingsPanel';
+import { detect as detectChord } from '@tonaljs/chord-detect';
 
 const VIEWBOX_WIDTH = 800;
 const VIEWBOX_HEIGHT = 600; // This will be overall SVG height, keyboard area will be calculated.
 
 const LYRICS_AREA_HEIGHT_FIXED = 80; // Fixed height for lyrics area
-const CONTROLS_AREA_HEIGHT_FIXED = 120; // Fixed height for controls (slider was moved)
+const CONTROLS_AREA_HEIGHT_FIXED = 200; // Fixed height for controls (slider was moved)
 
 // Geometric constants - these are hardcoded for visual stability
 const GEOMETRIC_CONSTANTS = {
-  farYFactor: 0.1, // Factor of keyboard area height
-  nearYFactor: 0.85, // Factor of keyboard area height
-  playAreaVisibleHeightFactor: 0.15, // Factor of keyboard area height
+  farYFactor: 0.3, // Factor of keyboard area height
+  nearYFactor: 0.8, // Factor of keyboard area height
+  playAreaVisibleHeightFactor: 0.2, // Factor of keyboard area height
   vanishingPointXFactor: 0.5, // Factor of VIEWBOX_WIDTH
-  vanishingPointYFactor: -0.3, // Factor of keyboard area height (negative, above keyboard)
-  horizonNarrowingFactor: 0.99,
+  vanishingPointYFactor: -0.9, // Factor of keyboard area height (negative, above keyboard)
+  horizonNarrowingFactor: 0.55,
   blackKeyWidthFactor: 0.6,
   blackKeyRelDepthFactor: 0, // Not used in current geometry
   blackKeyFrontFaceHeightFactor: 0.6,
-  playedChordFadeDuration: 500,
+  playedChordFadeDuration: 1500,
   dotYFactorWhite: 0.75,
   dotYFactorBlack: 0.5,
 };
@@ -148,7 +149,7 @@ const PlayAlongView: React.FC<PlayAlongViewProps> = ({ song, interactiveChords, 
   }, [keyboardAreaHeight]);
   
   useEffect(() => {
-    setUpcomingChordYPos(currentPerspectiveSettings.farY);
+    setUpcomingChordYPos(currentPerspectiveSettings.farY); // Start position for upcoming chord
   }, [currentPerspectiveSettings.farY]);
 
 
@@ -356,22 +357,83 @@ const PlayAlongView: React.FC<PlayAlongViewProps> = ({ song, interactiveChords, 
     }
   }, [isFinished, chordProgression, upcomingChordDisplayIndex, interactiveChords, currentPerspectiveSettings]);
 
+  // --- Chord listening state ---
+  const [listening, setListening] = useState<boolean>(true);
+  const midiInputRef = useRef<WebMidi.MIDIInput | null>(null);
+  const playedNotesRef = useRef<Set<string>>(new Set());
+  const listenTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // --- Chord listening effect ---
   useEffect(() => {
-    const handleKeyPress = (event: KeyboardEvent) => {
-      if (event.code === 'Space' && !isSettingsPanelOpen) {
-        event.preventDefault();
+    if (!listening || !upcomingChordInfo) return;
+
+    let midiAccess: WebMidi.MIDIAccess | null = null;
+
+    function noteNameFromMidi(midi: number) {
+      // Convert midi number to note name (e.g. 60 -> "C4")
+      const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      const note = NOTE_NAMES[midi % 12];
+      const octave = Math.floor(midi / 12) - 1;
+      return `${note}${octave}`;
+    }
+
+    function handleMidiMessage(event: WebMidi.MIDIMessageEvent) {
+      if (event.data[0] === 0x90 && event.data[2] > 0) {
+        // Note on
+        playedNotesRef.current.add(noteNameFromMidi(event.data[1]));
+      } else if (event.data[0] === 0x80 || (event.data[0] === 0x90 && event.data[2] === 0)) {
+        // Note off
+        playedNotesRef.current.delete(noteNameFromMidi(event.data[1]));
+      }
+      // Debounce: check after a short delay
+      if (listenTimeoutRef.current) clearTimeout(listenTimeoutRef.current);
+      listenTimeoutRef.current = setTimeout(checkForChord, 120);
+    }
+
+    function checkForChord() {
+      const notes = Array.from(playedNotesRef.current);
+      if (notes.length === 0) return;
+      // Use tonaljs chord-detect to recognize chord
+      const detected = detectChord(notes);
+      const upcomingChordNames = [
+        upcomingChordInfo.chordName,
+        ...(upcomingChordInfo.allSimplificationNames || []),
+        ...(upcomingChordInfo.allPossibleVoicingNames || [])
+      ].map(n => n.toLowerCase());
+      if (
+        detected.some(detectedName =>
+          upcomingChordNames.some(
+            chordName => detectedName.toLowerCase().replace(/\s+/g, '') === chordName.replace(/\s+/g, '')
+          )
+        )
+      ) {
         handlePlayNextChord();
+        playedNotesRef.current.clear();
       }
-      if (event.key === 'Escape') {
-        if (isSettingsPanelOpen) setIsSettingsPanelOpen(false);
-        else onExit();
+    }
+
+    async function setupMidi() {
+      try {
+        midiAccess = await navigator.requestMIDIAccess();
+        for (const input of midiAccess.inputs.values()) {
+          input.addEventListener('midimessage', handleMidiMessage);
+          midiInputRef.current = input;
+          break;
+        }
+      } catch (e) {
+        // MIDI not available
       }
-    };
-    window.addEventListener('keydown', handleKeyPress);
+    }
+
+    setupMidi();
+
     return () => {
-      window.removeEventListener('keydown', handleKeyPress);
+      if (midiInputRef.current) {
+        midiInputRef.current.removeEventListener('midimessage', handleMidiMessage);
+      }
+      if (listenTimeoutRef.current) clearTimeout(listenTimeoutRef.current);
     };
-  }, [handlePlayNextChord, onExit, isSettingsPanelOpen]);
+  }, [listening, upcomingChordInfo, handlePlayNextChord]);
 
   const getLyricLine = (index: number): string | null => {
     if (!chordProgression || index < 0 || index >= chordProgression.length) return null;
@@ -444,11 +506,31 @@ const PlayAlongView: React.FC<PlayAlongViewProps> = ({ song, interactiveChords, 
     ? upcomingChordInfo.activeSimplificationName
     : null;
 
+  // Compute the average X position for the upcoming chord name (centered on the notes)
+  const upcomingChordNameX = useMemo(() => {
+    if (!upcomingChordNotesForHighwayAndDots.length) return VIEWBOX_WIDTH / 2;
+    const xs = upcomingChordNotesForHighwayAndDots
+      .map(noteFullName => {
+        const keyData = perspectiveKeys.find(k => k.noteFullName === noteFullName);
+        if (!keyData) return null;
+        // Interpolate X between far and near based on the current highway highlight Y position
+        const { farLeftX, farRightX, nearLeftX, nearRightX, keyFarYVisual, keyNearYActual } = keyData;
+        const yRange = keyNearYActual - keyFarYVisual;
+        const ratio = yRange !== 0 ? Math.max(0, Math.min(1, (upcomingChordYPos - keyFarYVisual) / yRange)) : 0;
+        const leftX = farLeftX + (nearLeftX - farLeftX) * ratio;
+        const rightX = farRightX + (nearRightX - farRightX) * ratio;
+        return (leftX + rightX) / 2;
+      })
+      .filter((x): x is number => x !== null);
+    if (!xs.length) return VIEWBOX_WIDTH / 2;
+    return xs.reduce((a, b) => a + b, 0) / xs.length;
+  }, [upcomingChordNotesForHighwayAndDots, perspectiveKeys, upcomingChordYPos]);
+
   return (
     <div
-        className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-800 dark:bg-gray-900 text-white overflow-hidden"
-        aria-label="Play Along Area"
-        style={{ touchAction: 'none' }}
+      className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-slate-800 dark:bg-gray-900 text-white overflow-hidden"
+      aria-label="Play Along Area"
+      style={{ touchAction: 'none' }}
     >
       <Button
         onClick={onExit}
@@ -521,18 +603,21 @@ const PlayAlongView: React.FC<PlayAlongViewProps> = ({ song, interactiveChords, 
             
             {/* Upcoming Chord Name */}
             {upcomingChordName && (
-                 <text
-                    x={VIEWBOX_WIDTH / 2}
-                    y={currentPerspectiveSettings.farY + playAlongSettings.upcomingChordNameFontSize + 10} // Position near horizon
-                    textAnchor="middle"
-                    fill={playAlongSettings.upcomingChordNameColor}
-                    fontSize={playAlongSettings.upcomingChordNameFontSize}
-                    fontWeight="bold"
-                    stroke="rgba(0,0,0,0.5)"
-                    strokeWidth="0.5px"
-                    className="pointer-events-none select-none"
+                <text
+                  x={upcomingChordNameX}
+                  y={Math.max(
+                    currentPerspectiveSettings.farY + playAlongSettings.upcomingChordNameFontSize - 30,
+                    upcomingChordYPos - playAlongSettings.upcomingChordNameFontSize * 0.7
+                  )}
+                  textAnchor="middle"
+                  fill={playAlongSettings.upcomingChordNameColor}
+                  fontSize={playAlongSettings.upcomingChordNameFontSize}
+                  fontWeight="bold"
+                  stroke="rgba(0,0,0,0.5)"
+                  strokeWidth="0.5px"
+                  className="pointer-events-none select-none"
                 >
-                    {upcomingChordName}
+                  {upcomingChordName}
                 </text>
             )}
 
@@ -578,6 +663,26 @@ const PlayAlongView: React.FC<PlayAlongViewProps> = ({ song, interactiveChords, 
             onClose={() => setIsSettingsPanelOpen(false)}
         />
       )}
+
+      {/* Optionally, show listening status */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[120] text-xs text-yellow-400 bg-black/50 px-3 py-1 rounded shadow">
+        {listening ? "Listening for chord..." : "Not listening"}
+      </div>
+
+      {/* To test the automatic chord listening feature:
+
+      1. Make sure you have a MIDI keyboard connected to your computer.
+      2. Open your app in a browser that supports the Web MIDI API (Chrome is recommended).
+      3. Enter Play Along mode for a song.
+      4. When the "Listening for chord..." message appears at the bottom, play the upcoming chord on your MIDI keyboard.
+      5. If the chord is recognized (by name or voicing), the app should automatically advance to the next chord (as if you pressed the "Next Chord" button).
+      6. Repeat for each chord in the progression.
+
+      Troubleshooting:
+      - If nothing happens, check browser permissions for MIDI devices.
+      - If you see "Not listening", make sure your MIDI device is connected and reload the page.
+      - If chords are not recognized, try playing the chord in root position or as written in the songbook.
+      - You can open the browser console to check for any errors related to MIDI or permissions. */}
     </div>
   );
 };
